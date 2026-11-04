@@ -76,8 +76,6 @@ a{color:inherit}
 .sky{background:var(--sky-2)}
 
 /* ===== 3D VIEWER (embeddable widget) ===== */
-.embed-note{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;margin-top:16px;font-size:.86rem;color:var(--ink-3)}
-.embed-note code{font:500 .8rem ui-monospace,Menlo,monospace;background:#fff;border:1px solid var(--rule);padding:3px 8px;border-radius:6px;color:var(--navy)}
 #viewer{position:relative;height:clamp(560px,80vh,820px);border-radius:20px;overflow:hidden;background:#dfe7ef;box-shadow:0 30px 60px -30px rgba(7,28,59,.45),0 0 0 1px rgba(11,42,85,.08);font-family:var(--f-b);isolation:isolate}
 .v-canvas{position:absolute;inset:0}
 .v-canvas canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
@@ -303,8 +301,6 @@ footer b{color:#fff;font-family:var(--f-d);letter-spacing:.06em}
       <div class="v-tip" hidden></div>
       <div class="v-fallback" hidden><p>Your browser can't show the 3D model. Try a recent version of Chrome, Safari or Edge.</p></div>
     </div>
-
-    <div class="embed-note"><span>Added to any existing website with one line:</span><code>&lt;script src="https://cdn.storey3d.com/embed.js" data-project="riddhi-siddhi"&gt;&lt;/script&gt;</code></div>
   </div>
 </section>
 
