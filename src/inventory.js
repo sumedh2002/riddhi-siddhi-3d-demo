@@ -77,6 +77,23 @@ export function updateUnit(id, { status, remarks = '' }, by = 'Sales manager') {
   notify({ type: 'unit', id });
   emit({ type: 'unit', id, remote: false });
 }
+/** Set the same status on several flats at once (remarks are kept). Returns how many changed. */
+export function updateUnits(ids, status, by = 'Sales manager') {
+  if (!STATUSES.includes(status)) throw new Error('Unknown status ' + status);
+  const at = Date.now(); let n = 0;
+  for (const id of ids) {
+    const prev = getUnit(id);
+    if (prev.status === status) continue;
+    db.units[id] = { status, remarks: prev.remarks || '', updatedAt: at, updatedBy: by };
+    db.log.unshift({ id, from: prev.status, to: status, remarks: '', at, by }); n++;
+  }
+  if (!n) return 0;
+  db.log = db.log.slice(0, 60); db.updatedAt = at;
+  persist(db);
+  notify({ type: 'bulk' });
+  emit({ type: 'bulk', ids, remote: false });
+  return n;
+}
 export function resetDemo() {
   db = seed(); persist(db);
   notify({ type: 'reset' });
