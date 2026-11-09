@@ -383,6 +383,7 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
   .v-plan button span{display:none}
   .v-photo{right:0;bottom:auto;height:var(--ch)}
   .v-photo-rooms{left:10px;bottom:10px;max-width:calc(100% - 20px)}
+  .v-orbit{right:0;bottom:auto;height:var(--ch)}.v-orb-next{right:10px}.v-orb-tag{right:10px;bottom:10px}.v-orb-hint{bottom:auto;top:52px}
   .v-mini{right:10px;bottom:auto;top:52px;padding:6px}.v-mini svg{width:84px}.v-mini span{display:none}
   .v-toast{left:50%;top:calc(var(--ch) - 146px);width:max-content;max-width:calc(100% - 24px);white-space:normal}
   .v-labels.furn .rlabel{padding:2px 7px}.v-labels.furn .rlabel b{font-size:10.5px}
@@ -503,6 +504,7 @@ footer b{color:#fff;font-family:var(--f-d);letter-spacing:.06em}
     <div id="viewer" aria-label="Interactive 3D model of Riddhi Siddhi Apartment">
       <div class="v-canvas"></div>
       <div class="v-labels"></div>
+      <div class="v-orbit" hidden><img alt=""><img alt=""><button class="v-orb-prev" data-act="orb-prev" aria-label="Previous angle"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button><button class="v-orb-next" data-act="orb-next" aria-label="Next angle"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button><span class="v-orb-hint" aria-hidden="true">Drag to turn the building</span><span class="v-orb-tag">AI visualisation · indicative</span></div>
       <div class="v-photo" hidden><div class="v-photo-rooms" role="group" aria-label="Rooms"></div><span class="v-photo-hint" aria-hidden="true">Drag to look around</span></div>
       <div class="v-topbar"><nav class="v-crumbs" aria-label="Where you are"></nav></div>
       <aside class="v-panel" aria-label="Flat selection"><div class="v-body"></div></aside>

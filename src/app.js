@@ -1,7 +1,7 @@
 import { createViewer, DATA, statusOf, unitId } from './viewer.js';
 import { subscribe, lastUpdated, counts, STATUSES, STATUS_LABEL } from './inventory.js';
 import { PROJECT } from './project-data.js';
-import { PREMIUM, PREMIUM_FINISHES, FACE_KEYS, premiumSet } from './premium.js';
+import { PREMIUM, PREMIUM_SITE, PREMIUM_FINISHES, FACE_KEYS, premiumSet } from './premium.js';
 import { createPano } from './pano.js';
 
 const { FLATS, NF } = DATA;
@@ -31,7 +31,6 @@ const premBtn = planEl.querySelector('[data-act="premium"]');
 const prem = { on: false, view: null, tod: 'day', fin: 'tile', nextYaw: undefined };
 const premData = () => { const S = v.state; return (S.mode === 'apt' && S.flat && PREMIUM[S.flat]) || null; };
 const premView = P => P.views.find(x => x.id === prem.view) || P.views.find(x => x.id === P.start);
-const tierOf = S => prem.on ? 'premium' : S.furnished ? 'furn' : 'empty';
 const faceUrls = (P, prefix) => Object.fromEntries(FACE_KEYS.map(f => [f, `${P.dir}360/${prefix}-${f}.jpg`]));
 const yawTo = (a, b) => Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])); // plan x → east, plan y → south; yaw 0 looks north
 let pano = null, panoKey = '';
@@ -71,16 +70,36 @@ function walkTo(id, faceLook) {
   prem.view = id; prem.nextYaw = faceLook ? yawTo(to.p, to.look) : yawTo(from.p, to.p); // walking keeps you facing the way you moved
   render(true);
 }
+/* photo-real orbit of the building (Premium, project view) */
+const orbEl = root.querySelector('.v-orbit'), orbImgs = [...orbEl.querySelectorAll('img')], ORB_N = PREMIUM_SITE ? PREMIUM_SITE.frames.length : 0;
+const orbPrev = orbEl.querySelector('.v-orb-prev'), orbNext = orbEl.querySelector('.v-orb-next');
+let orbDir = 1, orbK = PREMIUM_SITE ? PREMIUM_SITE.start : 0, orbShown = -1, orbAll = false, orbTimer = null, orbDrag = null;
+const orbUrl = k => `${PREMIUM_SITE.dir}${PREMIUM_SITE.frames[k]}.jpg`;
+function showOrb() {
+  orbPrev.disabled = orbK <= 0; orbNext.disabled = orbK >= ORB_N - 1;
+  if (orbShown === orbK) return;
+  const k = orbK, cur = orbImgs.find(i => i.classList.contains('on')) || orbImgs[1], nxt = cur === orbImgs[0] ? orbImgs[1] : orbImgs[0];
+  nxt.onload = () => { if (orbK !== k) return; nxt.classList.add('on'); cur.classList.remove('on'); };
+  nxt.alt = `${PROJECT.name}, view ${k + 1} of ${ORB_N} (AI visualisation)`; nxt.src = orbUrl(k); orbShown = k;
+  if (!orbAll) { orbAll = true; setTimeout(() => { for (let i = 0; i < ORB_N; i++) new Image().src = orbUrl(i); }, 600); }
+}
+function stepOrb(d) { const n = Math.max(0, Math.min(ORB_N - 1, orbK + d)); if (n === orbK) return false; orbK = n; showOrb(); return true; }
+function orbUsed() { orbEl.classList.add('used'); clearInterval(orbTimer); orbTimer = null; }
+orbEl.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; orbDrag = e.clientX; orbEl.classList.add('drag'); orbUsed(); try { orbEl.setPointerCapture(e.pointerId); } catch (err) { /* ok */ } });
+orbEl.addEventListener('pointermove', e => { if (orbDrag === null) return; const dx = e.clientX - orbDrag, step = Math.max(40, orbEl.clientWidth / 14); if (Math.abs(dx) >= step) { stepOrb(dx < 0 ? 1 : -1); orbDrag = e.clientX; } });
+['pointerup', 'pointercancel'].forEach(ev => orbEl.addEventListener(ev, () => { orbDrag = null; orbEl.classList.remove('drag'); }));
 function syncLabelMode() {
-  const S = v.state;
-  if (!premData()) prem.on = false;
-  const furn = S.mode === 'apt' && S.furnished && !prem.on, tier = tierOf(S);
-  planEl.hidden = S.mode !== 'apt';
-  premBtn.hidden = !premData();
+  const S = v.state, P = premData(), pv = prem.on && !!P, orb = prem.on && S.mode === 'site' && !!PREMIUM_SITE;
+  const furn = S.mode === 'apt' && S.furnished && !pv, tier = pv || orb ? 'premium' : S.furnished ? 'furn' : 'empty';
+  planEl.hidden = !(S.mode === 'apt' || (S.mode === 'site' && PREMIUM_SITE));
+  premBtn.hidden = !(P || (S.mode === 'site' && PREMIUM_SITE));
+  root.classList.toggle('v-orb', orb); orbEl.hidden = !orb;
+  if (orb) { showOrb(); v.setAutoRotate(false); if (!orbTimer && !orbEl.classList.contains('used')) orbTimer = setInterval(() => { if (!stepOrb(orbDir)) { orbDir = -orbDir; stepOrb(orbDir); } }, 3500); }
+  else if (orbTimer) { clearInterval(orbTimer); orbTimer = null; }
   planEl.querySelectorAll('button').forEach(b => { const on = b.dataset.act === tier; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
-  root.classList.toggle('v-prem', prem.on);
-  photoEl.hidden = !prem.on;
-  if (prem.on) showPhoto();
+  root.classList.toggle('v-prem', pv);
+  photoEl.hidden = !pv;
+  if (pv) showPhoto();
   labels.classList.toggle('furn', furn);
   labels.classList.toggle('off', furn && !labelsOn());
   lblBtn.hidden = !furn;
@@ -139,7 +158,7 @@ function render(keepScroll) {
   let h = '';
   if (S.mode === 'site') {
     const all = counts();
-    h = head(esc(PROJECT.location.split(',').slice(-2).join(',').trim()), esc(PROJECT.name), `${all.total} homes in ${PROJECT.wings.length} wings. Choose a wing to see its floors, or go straight to a flat.`)
+    h = head(esc(PROJECT.location.split(',').slice(-2).join(',').trim()), esc(PROJECT.name), prem.on && PREMIUM_SITE ? `Photo-real views made with AI from the building's 3D model. Pick a wing to explore its floors and flats in live 3D.` : `${all.total} homes in ${PROJECT.wings.length} wings. Choose a wing to see its floors, or go straight to a flat.`)
       + sec('Go to a flat', `<form class="w-search" data-search role="search"><label class="w-sr" for="vq">Flat number</label><input id="vq" name="q" placeholder="Flat number, e.g. A-506" autocomplete="off" spellcheck="false" enterkeyhint="go"><button type="submit">Go${ICON.arrow}</button></form><p class="v-err" role="alert" hidden></p>`)
       + sec('Wings', `<div class="w-list">${PROJECT.wings.map(x => {
         const c = counts({ wing: x });
@@ -371,7 +390,8 @@ try {
   v = createViewer(root, { onMode: () => {}, onSelect: render, onHover, onFrame: () => v && onFrame(), onInteract });
   render();
   window.__viewer = v;
-  const qs = new URLSearchParams(location.search), deep = qs.get('flat'); // e.g. ?flat=A-506&inside=1 (links from the sales console)
+  const qs = new URLSearchParams(location.search), deep = qs.get('flat');
+  if (!deep && qs.get('plan') === 'premium' && PREMIUM_SITE) { prem.on = true; render(); } // e.g. ?flat=A-506&inside=1 (links from the sales console)
   if (deep) {
     document.getElementById('explore').scrollIntoView();
     setTimeout(() => { if (goToFlat(deep) && qs.get('inside')) setTimeout(() => { // &plan=basic | premium picks the plan to open with
