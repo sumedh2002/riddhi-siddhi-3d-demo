@@ -1,7 +1,8 @@
 import { createViewer, DATA, statusOf, unitId } from './viewer.js';
 import { subscribe, lastUpdated, counts, STATUSES, STATUS_LABEL } from './inventory.js';
 import { PROJECT } from './project-data.js';
-import { PREMIUM, PREMIUM_FINISHES, premiumShot } from './premium.js';
+import { PREMIUM, PREMIUM_FINISHES, FACE_KEYS, premiumSet } from './premium.js';
+import { createPano } from './pano.js';
 
 const { FLATS, NF } = DATA;
 const root = document.getElementById('viewer');
@@ -24,40 +25,36 @@ const isPhone = () => root.clientWidth <= 820;
 let labelsPref = null;
 const labelsOn = () => labelsPref === null ? !isPhone() : labelsPref;
 const planEl = root.querySelector('.v-plan');
-/* Premium photo view (only for flats that have photos, see premium.js) */
-const photoEl = root.querySelector('.v-photo'), photoImgs = [...photoEl.querySelectorAll('img')], roomsBar = photoEl.querySelector('.v-photo-rooms');
+/* Premium 360° walkthrough (only for flats that have panoramas, see premium.js) */
+const photoEl = root.querySelector('.v-photo'), roomsBar = photoEl.querySelector('.v-photo-rooms');
 const premBtn = planEl.querySelector('[data-act="premium"]');
-const prem = { on: false, view: 'living', tod: 'day', fin: 'tile', x: 50 };
+const prem = { on: false, view: null, tod: 'day', fin: 'tile', nextYaw: undefined };
 const premData = () => { const S = v.state; return (S.mode === 'apt' && S.flat && PREMIUM[S.flat]) || null; };
+const premView = P => P.views.find(x => x.id === prem.view) || P.views.find(x => x.id === P.start);
 const tierOf = S => prem.on ? 'premium' : S.furnished ? 'furn' : 'empty';
-let shownPhoto = '';
+const faceUrls = (P, prefix) => Object.fromEntries(FACE_KEYS.map(f => [f, `${P.dir}360/${prefix}-${f}.jpg`]));
+const yawTo = (a, b) => Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])); // plan x → east, plan y → south; yaw 0 looks north
+let pano = null, panoKey = '';
 function showPhoto() {
   const P = premData(); if (!P) return;
-  const view = P.views.find(x => x.id === prem.view) || P.views[0], s = premiumShot(view, prem.tod, prem.fin), url = P.dir + s.file + '.jpg';
+  if (!pano) pano = createPano(photoEl, { onSpot: walkTo, onInteract: () => photoEl.classList.add('used'), onError: () => toast('<b>Could not load the 360° view</b><span>Check the connection and try again</span>') });
+  const view = premView(P), set = premiumSet(view, prem.tod, prem.fin);
   prem.view = view.id;
   roomsBar.innerHTML = P.views.map(x => `<button data-view="${x.id}"${x.id === view.id ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"'}>${esc(x.name)}</button>`).join('');
-  if (url === shownPhoto) return;
-  shownPhoto = url;
-  const cur = photoImgs.find(i => i.classList.contains('on')) || photoImgs[1], nxt = cur === photoImgs[0] ? photoImgs[1] : photoImgs[0];
-  nxt.onload = () => { if (shownPhoto !== url) return; nxt.classList.add('on'); cur.classList.remove('on'); };
-  nxt.alt = `${view.name}, ${s.tod === 'evening' ? 'evening' : 'daytime'}, ${PREMIUM_FINISHES[s.fin].toLowerCase()} floor (AI visualisation)`;
-  nxt.style.objectPosition = `${prem.x}% 50%`;
-  nxt.src = url;
+  const key = P.dir + set.prefix;
+  if (key === panoKey && prem.nextYaw === undefined) return;
+  const first = !panoKey; panoKey = key;
+  const spots = view.links.map(l => ({ key: l.to, label: P.views.find(x => x.id === l.to).name, dir: [l.at[0] - view.p[0], -1.45, l.at[1] - view.p[1]] }));
+  pano.show(faceUrls(P, set.prefix), spots, { yaw: prem.nextYaw !== undefined ? prem.nextYaw : first ? yawTo(view.p, view.look) : undefined, fade: !first });
+  prem.nextYaw = undefined;
+  for (const l of view.links) { const t = P.views.find(x => x.id === l.to); pano.preload(faceUrls(P, premiumSet(t, prem.tod, prem.fin).prefix)); }
 }
-function panPhoto() { photoImgs.forEach(i => { i.style.objectPosition = `${prem.x}% 50%`; }); }
-let pan = null;
-photoEl.addEventListener('pointerdown', e => {
-  if (e.target.closest('button')) return;
-  pan = { x: e.clientX, p: prem.x }; photoEl.classList.add('drag');
-  try { photoEl.setPointerCapture(e.pointerId); } catch (err) { /* not needed */ }
-});
-photoEl.addEventListener('pointermove', e => {
-  if (!pan) return;
-  const img = photoImgs.find(i => i.classList.contains('on')), ar = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 1.5;
-  const over = Math.max(1, photoEl.clientHeight * ar - photoEl.clientWidth); // how much of the photo is cropped off
-  prem.x = Math.min(100, Math.max(0, pan.p - (e.clientX - pan.x) / over * 100)); panPhoto();
-});
-['pointerup', 'pointercancel'].forEach(ev => photoEl.addEventListener(ev, () => { pan = null; photoEl.classList.remove('drag'); }));
+function walkTo(id, faceLook) {
+  const P = premData(); if (!P) return;
+  const from = premView(P), to = P.views.find(x => x.id === id); if (!to || to === from) return;
+  prem.view = id; prem.nextYaw = faceLook ? yawTo(to.p, to.look) : yawTo(from.p, to.p); // walking keeps you facing the way you moved
+  render(true);
+}
 function syncLabelMode() {
   const S = v.state;
   if (!premData()) prem.on = false;
@@ -163,11 +160,11 @@ function render(keepScroll) {
     const tiers = `<div class="w-seg tiers" role="group" aria-label="Plan">${[['empty', 'Basic', 'Empty'], ['furn', 'Pro', 'Furnished'], ...(P ? [['premium', 'Premium', 'Photo']] : [])].map(([a, t, d]) => `<button data-act="${a}"${on(tier === a)}><b>${t}</b><span>${d}</span></button>`).join('')}</div>`;
     const foot = `<div class="w-foot w-foot-2"><button class="w-btn" data-go="floor">${ICON.left}Floor ${f}</button><button class="w-btn pri" data-act="enquire">Enquire about ${id}</button></div>`;
     if (tier === 'premium') {
-      const view = P.views.find(x => x.id === prem.view) || P.views[0], sh = premiumShot(view, prem.tod, prem.fin), keys = Object.keys(view.shots);
+      const view = premView(P), sh = premiumSet(view, prem.tod, prem.fin), keys = Object.keys(view.sets);
       const fins = [...new Set(keys.map(x => x.split('-')[1]))], tods = [...new Set(keys.map(x => x.split('-')[0]))];
       h = head(`Inside · ${bhk(k)} · ${w} Wing, floor ${f}`, `Flat ${id}`, '', badge(s0))
-        + sec('Interior', `${tiers}<p class="w-note">Photo-quality views made with AI from this flat's own 3D model, so walls, windows and doors match the plan. Indicative; final finishes as per the agreement.</p>`)
-        + sec('Views', `<ul class="w-views">${P.views.map(x => `<li><button data-view="${x.id}"${on(x.id === view.id)}><img src="${P.dir}t-${x.shots['day-tile']}.jpg" alt="" loading="lazy"><span><b>${esc(x.name)}</b><small>${esc(F.rooms[x.room][6] || '')}</small></span></button></li>`).join('')}</ul>`, 'Drag the photo to look around')
+        + sec('Interior', `${tiers}<p class="w-note">A 360° walkthrough made with AI from this flat's own 3D model, so walls, windows and doors match the plan. Indicative; final finishes as per the agreement.</p>`)
+        + sec('Rooms', `<ul class="w-views">${P.views.map(x => `<li><button data-view="${x.id}"${on(x.id === view.id)}><img src="${P.dir}360/t-${x.id}.jpg" alt="" loading="lazy"><span><b>${esc(x.name)}</b><small>${esc(F.rooms[x.room][6] || '')}</small></span></button></li>`).join('')}</ul>`, 'Drag to look around')
         + (fins.length > 1 ? sec('Floor finish', `<div class="w-seg" role="group" aria-label="Floor finish">${fins.map(x => `<button data-fin="${x}"${on(sh.fin === x)}>${PREMIUM_FINISHES[x]}</button>`).join('')}</div><p class="w-note">Vitrified tile is the standard specification. The others show upgrade options.</p>`) : '')
         + (tods.length > 1 ? sec('Light', `<div class="w-seg" role="group" aria-label="Time of day">${tods.map(x => `<button data-tod="${x}"${on(sh.tod === x)}>${x === 'day' ? 'Day' : 'Evening'}</button>`).join('')}</div>`) : '')
         + foot;
@@ -253,7 +250,7 @@ root.addEventListener('click', e => {
   else if (d.room !== undefined && t.closest('.w-rooms')) { labels.querySelectorAll('.rlabel').forEach(l => l.classList.toggle('hot', l.dataset.room === d.room)); onFrame(); return; }
   else if (d.act === 'furn' || d.act === 'empty') { const was = prem.on; prem.on = false; topCam = false; if (was && (d.act === 'furn') === S.furnished) render(true); else { v.setFurnished(d.act === 'furn'); render(true); } return; }
   else if (d.act === 'premium') { prem.on = true; hint.classList.add('gone'); render(true); return; }
-  else if (d.view) { prem.view = d.view; prem.x = 50; panPhoto(); render(true); return; }
+  else if (d.view) { walkTo(d.view, true); return; }
   else if (d.fin) { prem.fin = d.fin; render(true); return; }
   else if (d.tod) { prem.tod = d.tod; render(true); return; }
   else if (d.act === 'top' || d.act === 'v3d') { topCam = d.act === 'top'; topCam ? v.topView() : v.view3d(); t.parentElement.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b === t); b.setAttribute('aria-pressed', String(b === t)); }); return; }
