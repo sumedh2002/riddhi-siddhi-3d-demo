@@ -73,10 +73,11 @@ function render(keepScroll) {
     <p class="v-note">*Indicative, added up from the brochure's room sizes. Final carpet area as per the RERA agreement.</p>`;
   } else if (S.mode === 'apt') {
     const F = FLATS[k], id = unitId(w, f, F.n), st = statusOf(id);
-    h = `<div class="v-row"><div><p class="v-eyebrow">Inside · ${bhk(k)}</p><h3>Flat ${id}</h3></div>${chip(st)}</div>
+    h = `<div class="v-row"><div><p class="v-eyebrow">Inside · ${bhk(k)}${S.furnished ? ' · Furnished' : ''}</p><h3>Flat ${id}</h3></div>${chip(st)}</div>
+    <div class="v-seg" role="group" aria-label="Interior"><button data-act="furn" class="${S.furnished ? 'on' : ''}">Furnished</button><button data-act="empty" class="${S.furnished ? '' : 'on'}">Empty</button></div>
     <div class="v-seg" role="group" aria-label="Camera"><button data-act="v3d" class="on">3D view</button><button data-act="top">Top view</button></div>
     <ul class="v-rooms">${F.rooms.map((r, i) => r[6] ? `<li data-room="${i}"><span>${esc(r[0])}</span><b>${esc(r[6])}</b></li>` : '').join('')}</ul>
-    <p class="v-note">Walls are cut at 1.2 m so you can see the full layout. Room sizes as printed in the brochure. Shown unfurnished.</p>
+    <p class="v-note">${S.furnished ? 'Furniture is indicative, to show scale. Walls are cut at 2.1 m so you can see inside.' : 'Walls are cut at 1.2 m so you can see the full layout.'} Room sizes as printed in the brochure.</p>
     <button class="v-btn v-btn-primary" data-act="enquire">Enquire about ${id}</button>
     <button class="v-btn" data-go="floor">← Back to floor ${f}</button>`;
   }
@@ -139,6 +140,7 @@ root.addEventListener('click', e => {
   else if (d.step) { const nf = Math.min(NF, Math.max(1, S.floor + +d.step)); v.selectFloor(nf); }
   else if (d.flat) v.selectFlat(d.flat);
   else if (d.act === 'explore') v.explore();
+  else if (d.act === 'furn' || d.act === 'empty') { v.setFurnished(d.act === 'furn'); render(true); return; }
   else if (d.act === 'top') { v.topView(); t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); return; }
   else if (d.act === 'v3d') { v.view3d(); t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); return; }
   else if (d.act === 'enquire') { enquire(unitId(S.wing, S.floor, FLATS[S.flat].n), bhk(S.flat)); return; }
