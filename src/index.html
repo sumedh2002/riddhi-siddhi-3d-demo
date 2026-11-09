@@ -350,6 +350,21 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
 .w-views b{display:block;font:500 13px/1.25 var(--w-f);color:var(--w-ink)}
 .w-views small{display:block;margin-top:3px;font:400 11.5px/1.2 var(--w-m);color:var(--w-ink-3)}
 
+/* Premium: photo-real front views of the building (drag to turn) */
+.v-orbit{position:absolute;left:0;top:0;bottom:0;right:calc(var(--w-side) - 8px);z-index:2;overflow:hidden;background:#cfd8e0;cursor:grab;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+.v-orbit.drag{cursor:grabbing}
+.v-orbit>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .35s ease;pointer-events:none;-webkit-user-drag:none}
+.v-orbit>img.on{opacity:1}
+.v-orbit>button{position:absolute;z-index:2;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--w-line);border-radius:50%;background:var(--w-glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:var(--w-shadow-s);color:var(--w-ink);cursor:pointer}
+.v-orbit>button:hover{background:var(--w-bg)}
+.v-orbit>button:disabled{opacity:.35;cursor:default}
+.v-orb-prev{left:12px}.v-orb-next{right:34px}
+.v-orbit>button svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.v-orb-hint{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);padding:9px 14px;border-radius:999px;background:var(--w-scrim);color:#fff;font:500 12.5px/1 var(--w-f);white-space:nowrap;pointer-events:none;transition:opacity .5s}
+.v-orbit.used .v-orb-hint{opacity:0}
+.v-orb-tag{position:absolute;z-index:2;right:34px;bottom:12px;padding:6px 9px;border-radius:7px;background:var(--w-scrim);color:#fff;font:500 11px/1 var(--w-f);pointer-events:none}
+#viewer.v-orb .v-labels,#viewer.v-orb .v-hint,#viewer.v-orb .v-compass,#viewer.v-orb .w-tb [data-act="reset"],#viewer.v-orb .w-tb [data-act="labels"],#viewer.v-orb .w-tb [data-act="zin"],#viewer.v-orb .w-tb [data-act="zout"],#viewer.v-orb .w-tb .sep{display:none}
+#viewer.v-orb .v-tools{z-index:4}
 /* hide / show the side panel so the view can use the full width */
 .v-panel{transition:transform .35s cubic-bezier(.2,.7,.2,1),opacity .35s}
 #viewer.v-collapsed{--w-side:0px}

@@ -290,8 +290,9 @@ root.addEventListener('click', e => {
   else if (d.tod) { prem.tod = d.tod; render(true); return; }
   else if (d.act === 'top' || d.act === 'v3d') { topCam = d.act === 'top'; topCam ? v.topView() : v.view3d(); t.parentElement.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b === t); b.setAttribute('aria-pressed', String(b === t)); }); return; }
   else if (d.act === 'enquire') { enquire(unitId(S.wing, S.floor, FLATS[S.flat].n), bhk(S.flat)); return; }
-  else if (d.act === 'zin') { if (prem.on && pano) pano.zoom(0.85); else v.zoom(0.75); return; }
-  else if (d.act === 'zout') { if (prem.on && pano) pano.zoom(1.18); else v.zoom(1.33); return; }
+  else if (d.act === 'orb-prev' || d.act === 'orb-next') { orbUsed(); stepOrb(d.act === 'orb-next' ? 1 : -1); return; }
+  else if (d.act === 'zin') { if (prem.on && premData() && pano) pano.zoom(0.85); else v.zoom(0.75); return; }
+  else if (d.act === 'zout') { if (prem.on && premData() && pano) pano.zoom(1.18); else v.zoom(1.33); return; }
   else if (d.act === 'reset') { v.reset(); return; }
   else if (d.act === 'full') { toggleFull(); return; }
   else if (d.act === 'side') { const c = root.classList.toggle('v-collapsed'); t.setAttribute('aria-expanded', String(!c)); t.setAttribute('aria-label', c ? 'Show details' : 'Hide details'); t.title = t.getAttribute('aria-label'); v.layout(); onFrame(); return; }
