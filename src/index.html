@@ -179,6 +179,12 @@ a{color:inherit}
 .v-labels.furn.off .rlabel:not(.hot){display:none}
 #viewer.v-drag .v-labels.furn .rlabel:not(.hot){opacity:.12}
 .v-tools button.on{background:var(--navy);color:#fff}
+/* Pro | Basic switch on the 3D view, for comparing the two plans on the spot */
+.v-plan{position:absolute;top:16px;right:372px;display:flex;gap:2px;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);padding:4px;border-radius:13px;box-shadow:0 6px 18px rgba(7,28,59,.18);z-index:3}
+.v-plan button{border:0;background:transparent;padding:8px 13px;border-radius:10px;font:600 .82rem var(--f-b);color:var(--ink-2);cursor:pointer;white-space:nowrap;transition:background .2s,color .2s}
+.v-plan button b{font-weight:800;color:var(--navy)}
+.v-plan button.on{background:var(--navy);color:#dfe6f1}.v-plan button.on b{color:#fff}
+.v-plan button.on[data-act="furn"]{background:linear-gradient(135deg,#c79a3e,#a87a26);color:#fff8ea}
 .v-exit{display:none;position:absolute;right:12px;top:12px;z-index:4;width:40px;height:40px;border-radius:12px;border:0;background:rgba(255,255,255,.94);box-shadow:0 4px 14px rgba(7,28,59,.14);place-items:center;color:var(--navy);cursor:pointer}
 .v-exit svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
 #viewer.v-full{position:fixed;inset:0;z-index:1000;height:100vh;height:100dvh;border-radius:0;box-shadow:none;margin:0}
@@ -192,6 +198,7 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
   .v-power{display:none}
   .v-tools{bottom:auto;top:calc(var(--ch) - 56px);left:12px}
   .v-hint{bottom:auto;top:calc(var(--ch) - 100px)}
+  .v-plan{right:10px;top:calc(var(--ch) - 106px)}.v-plan button{padding:7px 11px;font-size:.78rem}
   .v-labels.furn .rlabel{padding:2px 7px}.v-labels.furn .rlabel b{font-size:.66rem}.v-labels.furn .rlabel span{font-size:.62rem}
   #viewer.v-full{--ch:62vh;--ch:62dvh}
   #viewer.v-full .v-panel{flex:1;overflow:auto}
@@ -273,7 +280,7 @@ footer b{color:#fff;font-family:var(--f-d);letter-spacing:.06em}
 </style>
 </head>
 <body>
-<p class="ribbon"><b>Pro preview</b> · Furnished 3D interiors. Open any flat and tap “Explore inside”. The 3D explorer is a plug-in widget, shown on a sample of the builder's project page. <a href="admin.html" target="_blank" rel="noopener">Open the sales console →</a></p>
+<p class="ribbon"><b>Pro preview</b> · Open any flat, tap “Explore inside”, then switch between Pro (furnished) and Basic (empty). The 3D explorer is a plug-in widget, shown on a sample of the builder's project page. <a href="admin.html" target="_blank" rel="noopener">Open the sales console →</a></p>
 <header class="head">
   <div class="wrap head-row">
     <a class="brand" href="#top" aria-label="Riddhi Siddhi Apartment, back to top"><b>RIDDHI SIDDHI</b><small>APARTMENT</small></a>
@@ -318,6 +325,7 @@ footer b{color:#fff;font-family:var(--f-d);letter-spacing:.06em}
         <button data-act="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
         <span class="v-compass" aria-hidden="true" title="Direction of the 11 m road"><i></i></span>
       </div>
+      <div class="v-plan" role="group" aria-label="Compare plans" hidden><button data-act="furn"><b>Pro</b> · Furnished</button><button data-act="empty"><b>Basic</b> · Empty</button></div>
       <button class="v-exit" data-act="full" aria-label="Exit full screen"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <p class="v-hint">Drag to rotate · Scroll to zoom · Click a wing</p>
       <p class="v-power">3D explorer · Arch3</p>

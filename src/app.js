@@ -19,8 +19,11 @@ const lblBtn = root.querySelector('.v-tools [data-act="labels"]');
 const isPhone = () => window.matchMedia && matchMedia('(max-width: 820px)').matches;
 let labelsPref = null;
 const labelsOn = () => labelsPref === null ? !isPhone() : labelsPref;
+const planEl = root.querySelector('.v-plan');
 function syncLabelMode() {
   const S = v.state, furn = S.mode === 'apt' && S.furnished;
+  planEl.hidden = S.mode !== 'apt';
+  planEl.querySelectorAll('button').forEach(b => { const on = (b.dataset.act === 'furn') === S.furnished; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
   labels.classList.toggle('furn', furn);
   labels.classList.toggle('off', furn && !labelsOn());
   lblBtn.hidden = !furn;
@@ -86,11 +89,11 @@ function render(keepScroll) {
     <p class="v-note">*Indicative, added up from the brochure's room sizes. Final carpet area as per the RERA agreement.</p>`;
   } else if (S.mode === 'apt') {
     const F = FLATS[k], id = unitId(w, f, F.n), st = statusOf(id);
-    h = `<div class="v-row"><div><p class="v-eyebrow">Inside · ${bhk(k)}${S.furnished ? ' · Furnished' : ''}</p><h3>Flat ${id}</h3></div>${chip(st)}</div>
-    <div class="v-seg" role="group" aria-label="Interior"><button data-act="furn" class="${S.furnished ? 'on' : ''}">Furnished</button><button data-act="empty" class="${S.furnished ? '' : 'on'}">Empty</button></div>
+    h = `<div class="v-row"><div><p class="v-eyebrow">Inside · ${bhk(k)} · ${S.furnished ? 'Pro' : 'Basic'}</p><h3>Flat ${id}</h3></div>${chip(st)}</div>
+    <div class="v-seg" role="group" aria-label="Plan"><button data-act="furn" class="${S.furnished ? 'on' : ''}">Pro · Furnished</button><button data-act="empty" class="${S.furnished ? '' : 'on'}">Basic · Empty</button></div>
     <div class="v-seg" role="group" aria-label="Camera"><button data-act="v3d" class="on">3D view</button><button data-act="top">Top view</button></div>
     <ul class="v-rooms">${F.rooms.map((r, i) => r[6] ? `<li data-room="${i}"><span>${esc(r[0])}</span><b>${esc(r[6])}</b></li>` : '').join('')}</ul>
-    <p class="v-note">${S.furnished ? 'Furniture is indicative, to show scale. Walls are cut at 2.1 m so you can see inside.' : 'Walls are cut at 1.2 m so you can see the full layout.'} Room sizes as printed in the brochure.</p>
+    <p class="v-note">${S.furnished ? '<b>Pro plan:</b> furnished 3D interiors, placed automatically from the floor plans. Furniture is indicative, to show scale.' : '<b>Basic plan:</b> the empty layout, with walls cut at 1.2 m so you can see every room.'} Room sizes as printed in the brochure.</p>
     <button class="v-btn v-btn-primary" data-act="enquire">Enquire about ${id}</button>
     <button class="v-btn" data-go="floor">← Back to floor ${f}</button>`;
   }
