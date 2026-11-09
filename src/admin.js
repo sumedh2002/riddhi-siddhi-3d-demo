@@ -253,7 +253,7 @@ function pop() {
   return `${narrow() ? '<div class="pop-scrim" data-act="close"></div>' : ''}
   <section class="pop${S.popEnter ? ' enter' : ''}" role="dialog" aria-label="Flat ${id}">
     <div class="pop-h"><span class="grip">${I.grip}</span><b>Flat <span class="mono">${id}</span></b>
-      <span style="margin-left:auto;display:flex"><a class="ib" href="index.html?flat=${id}#explore" target="_blank" rel="noopener" title="See in 3D" aria-label="See ${id} in 3D">${I.ext}</a><button class="ib" data-act="close" aria-label="Close">${I.x}</button></span></div>
+      <span style="margin-left:auto;display:flex"><a class="ib" href="index.html?flat=${id}&inside=1#explore" target="_blank" rel="noopener" title="See in 3D" aria-label="See ${id} in 3D">${I.ext}</a><button class="ib" data-act="close" aria-label="Close">${I.x}</button></span></div>
     <div class="pop-meta">
       <div>${I.building}${p.wing} Wing · Floor ${p.floor}</div>
       <div>${I.ruler}${F.bhk} BHK · ≈ ${F.carpet} sq ft carpet</div>
@@ -345,7 +345,7 @@ function exportCsv() {
   toast(`${I.check}Exported ${UNITS.length} flats as a CSV file`);
 }
 function copyLink(id) {
-  const url = new URL(`index.html?flat=${id}#explore`, location.href).href;
+  const url = new URL(`index.html?flat=${id}&inside=1#explore`, location.href).href;
   const done = () => toast(`${I.check}Link to ${id} in 3D copied`), fail = () => toast(`Copy this link: ${esc(url)}`);
   try { navigator.clipboard.writeText(url).then(done, fail); } catch (e) { fail(); }
 }

@@ -14,6 +14,22 @@ const toastEl = root.querySelector('.v-toast');
 const flatsOfWing = w => Object.keys(FLATS).filter(k => FLATS[k].wing === w).sort();
 const bhk = k => FLATS[k].bhk + ' BHK';
 let v = null;
+// room labels in the furnished view: on by default on larger screens, off on phones (the flat stays clear)
+const lblBtn = root.querySelector('.v-tools [data-act="labels"]');
+const isPhone = () => window.matchMedia && matchMedia('(max-width: 820px)').matches;
+let labelsPref = null;
+const labelsOn = () => labelsPref === null ? !isPhone() : labelsPref;
+const planEl = root.querySelector('.v-plan');
+function syncLabelMode() {
+  const S = v.state, furn = S.mode === 'apt' && S.furnished;
+  planEl.hidden = S.mode !== 'apt';
+  planEl.querySelectorAll('button').forEach(b => { const on = (b.dataset.act === 'furn') === S.furnished; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  labels.classList.toggle('furn', furn);
+  labels.classList.toggle('off', furn && !labelsOn());
+  lblBtn.hidden = !furn;
+  lblBtn.classList.toggle('on', furn && labelsOn());
+  lblBtn.setAttribute('aria-pressed', String(furn && labelsOn()));
+}
 
 function availCount(w, f) { return flatsOfWing(w).filter(k => statusOf(unitId(w, f, FLATS[k].n)) === 'available').length; }
 function wingAvail(w) { let s = 0; for (let f = 1; f <= NF; f++) s += availCount(w, f); return s; }
@@ -73,10 +89,11 @@ function render(keepScroll) {
     <p class="v-note">*Indicative, added up from the brochure's room sizes. Final carpet area as per the RERA agreement.</p>`;
   } else if (S.mode === 'apt') {
     const F = FLATS[k], id = unitId(w, f, F.n), st = statusOf(id);
-    h = `<div class="v-row"><div><p class="v-eyebrow">Inside · ${bhk(k)}</p><h3>Flat ${id}</h3></div>${chip(st)}</div>
+    h = `<div class="v-row"><div><p class="v-eyebrow">Inside · ${bhk(k)} · ${S.furnished ? 'Pro' : 'Basic'}</p><h3>Flat ${id}</h3></div>${chip(st)}</div>
+    <div class="v-seg" role="group" aria-label="Plan"><button data-act="furn" class="${S.furnished ? 'on' : ''}">Pro · Furnished</button><button data-act="empty" class="${S.furnished ? '' : 'on'}">Basic · Empty</button></div>
     <div class="v-seg" role="group" aria-label="Camera"><button data-act="v3d" class="on">3D view</button><button data-act="top">Top view</button></div>
     <ul class="v-rooms">${F.rooms.map((r, i) => r[6] ? `<li data-room="${i}"><span>${esc(r[0])}</span><b>${esc(r[6])}</b></li>` : '').join('')}</ul>
-    <p class="v-note">Walls are cut at 1.2 m so you can see the full layout. Room sizes as printed in the brochure. Shown unfurnished.</p>
+    <p class="v-note">${S.furnished ? '<b>Pro plan:</b> furnished 3D interiors, placed automatically from the floor plans. Furniture is indicative, to show scale.' : '<b>Basic plan:</b> the empty layout, with walls cut at 1.2 m so you can see every room.'} Room sizes as printed in the brochure.</p>
     <button class="v-btn v-btn-primary" data-act="enquire">Enquire about ${id}</button>
     <button class="v-btn" data-go="floor">← Back to floor ${f}</button>`;
   }
@@ -101,19 +118,29 @@ function buildLabels() {
     el.className = 'pin pin-big'; el.innerHTML = `<b>${unitId(S.wing, S.floor, FLATS[S.flat].n)}</b> ${bhk(S.flat)}`; labels.appendChild(el);
     labelItems.push({ el, pos: p.center.clone().setY(S.floor * 3 + 2.2) });
   } else if (S.mode === 'apt') {
+    const rooms = FLATS[S.flat].rooms;
     v.flatParts[S.flat].rooms.forEach((r, i) => {
       if (!r.dim) return;
       const el = document.createElement('div'); el.className = 'rlabel'; el.dataset.room = i;
       el.innerHTML = `<b>${esc(r.name)}</b><span>${esc(r.dim)}</span>`; labels.appendChild(el);
-      labelItems.push({ el, pos: r.c.clone().setY(S.floor * 3 + 0.3) });
+      const q = rooms[i];
+      labelItems.push({ el, pos: r.c.clone().setY(S.floor * 3 + 0.3), area: (q[4] - q[2]) * (q[5] - q[3]) });
     });
   }
+  syncLabelMode();
 }
 function onFrame() {
-  for (const it of labelItems) {
-    const p = v.project(it.pos);
-    it.el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%,-100%)`;
-    it.el.style.visibility = p.z < 1 ? 'visible' : 'hidden';
+  const cull = labels.classList.contains('furn'), placed = [];
+  for (const it of labelItems) { it.p = v.project(it.pos); it.el.style.transform = `translate(${it.p.x.toFixed(1)}px, ${it.p.y.toFixed(1)}px) translate(-50%,-100%)`; }
+  // in the furnished view, hide labels that would overlap a bigger room's label
+  const order = cull ? labelItems.slice().sort((a, b) => (b.el.classList.contains('hot') - a.el.classList.contains('hot')) || (b.area - a.area)) : labelItems;
+  for (const it of order) {
+    let show = it.p.z < 1;
+    if (show && cull && it.el.offsetWidth) {
+      const w = it.el.offsetWidth + 6, h = it.el.offsetHeight + 4, r = [it.p.x - w / 2, it.p.y - h, it.p.x + w / 2, it.p.y];
+      if (placed.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) show = false; else placed.push(r);
+    }
+    it.el.style.visibility = show ? 'visible' : 'hidden';
   }
   needle.style.transform = `rotate(${(-v.azimuth() * 180 / Math.PI).toFixed(1)}deg)`;
 }
@@ -124,7 +151,8 @@ function onHover(h) {
   else { const S = v.state, id = unitId(FLATS[h.flat].wing, S.floor, FLATS[h.flat].n), st = statusOf(id); tip.innerHTML = `<b>${id}</b> · ${bhk(h.flat)} · ${ST[st]}`; }
   tip.style.left = (h.x - r.left + 14) + 'px'; tip.style.top = (h.y - r.top + 14) + 'px'; tip.hidden = false;
 }
-function onInteract() { hint.classList.add('gone'); }
+function onInteract() { hint.classList.add('gone'); root.classList.add('v-drag'); }
+['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => root.querySelector('.v-canvas').addEventListener(ev, () => root.classList.remove('v-drag')));
 
 /* ---------- panel events ---------- */
 root.addEventListener('click', e => {
@@ -139,6 +167,9 @@ root.addEventListener('click', e => {
   else if (d.step) { const nf = Math.min(NF, Math.max(1, S.floor + +d.step)); v.selectFloor(nf); }
   else if (d.flat) v.selectFlat(d.flat);
   else if (d.act === 'explore') v.explore();
+  else if (d.act === 'labels') { labelsPref = !labelsOn(); syncLabelMode(); onFrame(); return; }
+  else if (d.room !== undefined && t.closest('.v-rooms')) { labels.querySelectorAll('.rlabel').forEach(l => l.classList.toggle('hot', l.dataset.room === d.room)); onFrame(); return; }
+  else if (d.act === 'furn' || d.act === 'empty') { v.setFurnished(d.act === 'furn'); render(true); return; }
   else if (d.act === 'top') { v.topView(); t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); return; }
   else if (d.act === 'v3d') { v.view3d(); t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); return; }
   else if (d.act === 'enquire') { enquire(unitId(S.wing, S.floor, FLATS[S.flat].n), bhk(S.flat)); return; }
@@ -239,8 +270,11 @@ try {
   v = createViewer(root, { onMode: () => {}, onSelect: render, onHover, onFrame: () => v && onFrame(), onInteract });
   render();
   window.__viewer = v;
-  const deep = new URLSearchParams(location.search).get('flat'); // e.g. ?flat=A-506 (links from the sales console)
-  if (deep) { document.getElementById('explore').scrollIntoView(); setTimeout(() => goToFlat(deep), 300); }
+  const qs = new URLSearchParams(location.search), deep = qs.get('flat'); // e.g. ?flat=A-506&inside=1 (links from the sales console)
+  if (deep) {
+    document.getElementById('explore').scrollIntoView();
+    setTimeout(() => { if (goToFlat(deep) && qs.get('inside')) setTimeout(() => { v.explore(); render(); }, 1500); }, 300);
+  }
 } catch (err) {
   root.classList.add('v-failed');
   root.querySelector('.v-fallback').hidden = false;

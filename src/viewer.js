@@ -4,6 +4,9 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 import { FH, NF, CX, CY, BLOCKS, FLATS, COMMON, CORE_A, mx, unitId } from './project-data.js';
+import { flatLayout } from './layout.js';
+import { createInteriorKit } from './interiors.js';
+import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { statusOf } from './inventory.js';
 export { unitId, statusOf };
 export const DATA = { FLATS, NF };
@@ -47,7 +50,7 @@ export function createViewer(root, hooks = {}) {
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -55, right: 55, top: 55, bottom: -55, near: 10, far: 220 });
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
-  scene.add(sun);
+  scene.add(sun); scene.add(sun.target);
 
   /* ---------- Materials ---------- */
   const M = {
@@ -324,87 +327,19 @@ export function createViewer(root, hooks = {}) {
   /* ---------- FLOOR PLAN MODEL (generated from room rectangles) ---------- */
   const plan = new THREE.Group(); plan.visible = false; scene.add(plan);
   const flatParts = {}; // key -> {floors:[], walls:mesh, mat, center, rooms:[{name,mesh,center}]}
-  const allRects = [];
-  for (const k in FLATS) for (const r of FLATS[k].rooms) allRects.push({ k, r: [r[2], r[3], r[4], r[5]] });
-  const commonRects = COMMON.map(r => ({ k: 'C', r }));
-  const inAny = (x, y, skipKey) => allRects.concat(commonRects).some(o => o.k !== skipKey && x > o.r[0] - 0.05 && x < o.r[2] + 0.05 && y > o.r[1] - 0.05 && y < o.r[3] + 0.05);
-  const HUB = { E: 3, D: 2, L: 1 };
   const WALL_H = 1.25;
 
   function buildFlat(key) {
-    const F = FLATS[key], rooms = F.rooms, segs = [], tol = 0.26;
-    // edges of each room
-    const edges = rooms.map((r, i) => {
-      const [, , x0, y0, x1, y1] = r;
-      return [{ i, o: 'h', c: y0, a: x0, b: x1, n: -1 }, { i, o: 'h', c: y1, a: x0, b: x1, n: 1 }, { i, o: 'v', c: x0, a: y0, b: y1, n: -1 }, { i, o: 'v', c: x1, a: y0, b: y1, n: 1 }];
-    });
-    // shared intervals
-    const shared = [];
-    for (let i = 0; i < rooms.length; i++) for (let j = i + 1; j < rooms.length; j++) {
-      for (const e of edges[i]) for (const f of edges[j]) {
-        if (e.o !== f.o || e.n === f.n || Math.abs(e.c - f.c) > tol) continue;
-        const a = Math.max(e.a, f.a), b = Math.min(e.b, f.b);
-        if (b - a > 0.15) shared.push({ i, j, o: e.o, c: (e.c + f.c) / 2, a, b, ei: e, ej: f });
-      }
-    }
-    // choose doors: each non-hub room gets one door
-    const kind = i => rooms[i][1];
-    const doorOf = new Set();
-    rooms.forEach((r, i) => {
-      if (HUB[r[1]]) return;
-      let best = null, score = -1;
-      for (const s of shared) {
-        if (s.i !== i && s.j !== i) continue;
-        const o = s.i === i ? s.j : s.i, ok = kind(o), len = s.b - s.a;
-        let sc = HUB[ok] ? HUB[ok] * 10 : ((r[1] === 'T' || r[1] === 'W') && ok === 'B' ? 5 : (r[1] === 'B' && ok === 'K' ? 1 : -1));
-        if (sc < 0) continue; if (len >= 0.9) sc += 20; sc += len * 0.1;
-        if (sc > score) { score = sc; best = s; }
-      }
-      if (best) doorOf.add(best);
-    });
-    for (const s of shared) {
-      const hubHub = HUB[kind(s.i)] && HUB[kind(s.j)];
-      if (hubHub) continue;
-      if (doorOf.has(s)) {
-        const len = s.b - s.a, dw = Math.min(0.85, len - 0.2), m = (s.a + s.b) / 2;
-        if (dw > 0.3) { segs.push({ ...s, a: s.a, b: m - dw / 2, t: 0.11 }); segs.push({ ...s, a: m + dw / 2, b: s.b, t: 0.11 }); continue; }
-      }
-      segs.push({ ...s, t: 0.11 });
-    }
-    // outer segments
-    edges.forEach((es, i) => es.forEach(e => {
-      const cov = shared.filter(s => (s.ei === e || s.ej === e)).map(s => [s.a, s.b]);
-      for (const [a, b] of subtract([e.a, e.b], cov)) {
-        const m = (a + b) / 2, off = 0.4 * e.n;
-        const px = e.o === 'h' ? m : e.c + off, py = e.o === 'h' ? e.c + off : m;
-        const ext = !inAny(px, py, key);
-        segs.push({ o: e.o, c: e.c, a, b, t: 0.2, ext, room: rooms[i] });
-      }
-    }));
-    // entrance door
-    let bestSeg = null, bd = 1e9;
-    for (const s of segs) {
-      if (s.t !== 0.2) continue;
-      const [dx, dy] = F.door;
-      const d = s.o === 'h' ? Math.abs(s.c - dy) + Math.max(0, s.a - dx, dx - s.b) : Math.abs(s.c - dx) + Math.max(0, s.a - dy, dy - s.b);
-      if (d < bd) { bd = d; bestSeg = s; }
-    }
-    if (bestSeg) {
-      const p = bestSeg.o === 'h' ? F.door[0] : F.door[1], dw = 0.95;
-      const lo = Math.max(bestSeg.a, Math.min(p - dw / 2, bestSeg.b - dw)), hi = lo + dw;
-      segs.splice(segs.indexOf(bestSeg), 1, { ...bestSeg, b: lo, door: 1 }, { ...bestSeg, a: hi, door: 1 });
-    }
-    // geometry
+    const F = FLATS[key], rooms = F.rooms, L = flatLayout(key);
     const wallG = [], glassG = [];
-    for (const s of segs) {
+    for (const s of L.segs) {
       if (s.b - s.a < 0.05) continue;
       const h = s.t / 2;
       const bx = (z0, z1, a = s.a, b = s.b) => s.o === 'h' ? boxG(a, s.c - h, b, s.c + h, z0, z1) : boxG(s.c - h, a, s.c + h, b, z0, z1);
-      const kindR = s.room && s.room[1];
-      if (s.ext && kindR && 'LBKD'.includes(kindR) && s.b - s.a > 1.0) {
-        const L = s.b - s.a, gw = Math.min(kindR === 'L' ? 2.2 : 1.5, L - 0.5), m = (s.a + s.b) / 2;
-        wallG.push(bx(0, WALL_H, s.a, m - gw / 2), bx(0, WALL_H, m + gw / 2, s.b), bx(0, 0.55, m - gw / 2, m + gw / 2));
-        glassG.push(bx(0.55, WALL_H, m - gw / 2, m + gw / 2));
+      if (s.win) {
+        const [w0, w1] = s.win;
+        wallG.push(bx(0, WALL_H, s.a, w0), bx(0, WALL_H, w1, s.b), bx(0, 0.55, w0, w1));
+        glassG.push(bx(0.55, WALL_H, w0, w1));
       } else wallG.push(bx(0, WALL_H));
     }
     const part = { key, rooms: [] };
@@ -440,8 +375,69 @@ export function createViewer(root, hooks = {}) {
     const slab = meshOf(BLOCKS.map(B => boxG(B.r[0], B.r[1], B.r[2], B.r[3], -0.3, -0.005)), M.slab); slab.castShadow = false; plan.add(slab);
   }
 
+  /* ---------- FURNISHED INTERIORS (Pro) ---------- */
+  let kit = null; const interiors = {};
+  const ceilBg = new THREE.Color(0xd9cbb4); // ≈ the lit floor tone, so only furniture and walls show up as reflections
+  function interiorFor(key) {
+    if (interiors[key]) return interiors[key];
+    if (!kit) kit = createInteriorKit({ envMap: envTex, anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()) });
+    const res = kit.build(flatLayout(key), { CX, CY });
+    addFloorReflection(res);
+    res.group.visible = false; plan.add(res.group);
+    return (interiors[key] = res);
+  }
+  // Real-time reflections in the glossy floor tiles: a mirror pass (Reflector) whose
+  // image is blended into the tile material, softened and stronger at grazing angles.
+  function addFloorReflection(res) {
+    if (!res.floor) return;
+    const b = res.bounds, size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const tw = Math.max(256, Math.min(1024, Math.round(size.x * 0.6))), th = Math.max(256, Math.min(1024, Math.round(size.y * 0.6)));
+    const refl = new Reflector(new THREE.PlaneGeometry(b.w + 0.4, b.h + 0.4), { textureWidth: tw, textureHeight: th, clipBias: 0.002, multisample: 4 });
+    refl.rotation.x = -Math.PI / 2; refl.position.set(b.cx - CX, res.FL, b.cy - CY);
+    refl.material.colorWrite = false; refl.material.depthWrite = false; refl.renderOrder = -10;
+    const hide = []; res.group.traverse(o => { if (o.isMesh && o.userData.noReflect) hide.push(o); });
+    const orig = refl.onBeforeRender;
+    refl.onBeforeRender = function (r, s, c, ...rest) {
+      const bg = s.background; s.background = ceilBg; hide.forEach(o => { o.visible = false; });
+      orig.call(this, r, s, c, ...rest);
+      hide.forEach(o => { o.visible = true; }); s.background = bg;
+    };
+    res.group.add(refl);
+    const uni = { tReflect: { value: refl.getRenderTarget().texture }, reflMat: { value: new THREE.Matrix4() }, reflAmt: { value: 0.6 }, reflTexel: { value: new THREE.Vector2(1 / tw, 1 / th) } };
+    res.floorMat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, uni);
+      sh.vertexShader = 'uniform mat4 reflMat;\nvarying vec4 vReflUv;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tvReflUv = reflMat * modelMatrix * vec4( transformed, 1.0 );');
+      sh.fragmentShader = 'uniform sampler2D tReflect;\nuniform float reflAmt;\nuniform vec2 reflTexel;\nvarying vec4 vReflUv;\n' + sh.fragmentShader.replace('#include <tonemapping_fragment>', `{
+        vec2 ruv = vReflUv.xy / vReflUv.w;
+        vec3 rc = texture2D( tReflect, ruv ).rgb * 0.4;
+        rc += texture2D( tReflect, ruv + vec2( reflTexel.x * 1.3, 0.0 ) ).rgb * 0.15;
+        rc += texture2D( tReflect, ruv - vec2( reflTexel.x * 1.3, 0.0 ) ).rgb * 0.15;
+        rc += texture2D( tReflect, ruv + vec2( 0.0, reflTexel.y * 1.3 ) ).rgb * 0.15;
+        rc += texture2D( tReflect, ruv - vec2( 0.0, reflTexel.y * 1.3 ) ).rgb * 0.15;
+        float fres = pow( 1.0 - saturate( dot( normalize( normal ), normalize( vViewPosition ) ) ), 3.0 );
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, rc, reflAmt * ( 0.55 + 0.45 * fres ) );
+      }
+      #include <tonemapping_fragment>`);
+    };
+    res.floorMat.customProgramCacheKey = () => 'floor-reflect';
+    const inv = new THREE.Matrix4();
+    res.floor.onBeforeRender = () => { inv.copy(refl.matrixWorld).invert(); uni.reflMat.value.copy(refl.material.uniforms.textureMatrix.value).multiply(inv); };
+    res.reflector = refl;
+  }
+  // build + compile a flat's interior in the background, before the visitor opens it
+  function prewarm(key) {
+    if (state.flat !== key || interiors[key]) return;
+    const it = interiorFor(key);
+    if (renderer.compileAsync) { it.group.visible = true; renderer.compileAsync(scene, camera).catch(() => {}); it.group.visible = false; }
+  }
+  function aimSun(c) {
+    if (c) { sun.target.position.copy(c); sun.position.copy(c).add(new THREE.Vector3(-7, 30, 10)); Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 4, far: 70 }); sun.shadow.bias = -0.00025; sun.shadow.normalBias = 0.015; }
+    else { sun.target.position.set(0, 0, 0); sun.position.set(-48, 70, 52); Object.assign(sun.shadow.camera, { left: -55, right: 55, top: 55, bottom: -55, near: 10, far: 220 }); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03; }
+    sun.shadow.camera.updateProjectionMatrix(); sun.target.updateMatrixWorld();
+  }
+
   /* ---------- state & modes ---------- */
-  const state = { mode: 'site', wing: null, floor: null, flat: null, hoverWing: null, hoverFlat: null, statusOf: id => statusOf(id) };
+  const state = { mode: 'site', wing: null, floor: null, flat: null, hoverWing: null, hoverFlat: null, furnished: true, statusOf: id => statusOf(id) };
   function setGhost(lv, on) {
     floorGroups[lv].traverse(o => {
       if (!o.isMesh) return;
@@ -463,6 +459,11 @@ export function createViewer(root, hooks = {}) {
     site.visible = true; greens.visible = !xr;
     plan.visible = xr;
     if (xr) plan.position.y = f * FH + 0.06;
+    const inside = m === 'apt' && state.furnished && state.flat;
+    aimSun(inside ? flatParts[state.flat].center.clone().setY(f * FH) : null);
+    hemi.intensity = inside ? 1.3 : 1.15; sun.intensity = inside ? 2.3 : 2.9;
+    hemi.color.setHex(inside ? 0xfff1e0 : 0xcfe0ff); hemi.groundColor.setHex(inside ? 0xc9b48f : 0xb3a68a);
+    renderer.toneMappingExposure = inside ? 0.97 : 0.92;
     refreshFlatLook();
     renderer.shadowMap.needsUpdate = true; invalidate();
     hooks.onMode && hooks.onMode(state);
@@ -478,8 +479,11 @@ export function createViewer(root, hooks = {}) {
       const tint = (sel && apt) ? 0xffffff : sel ? 0x9ec0ff : hov ? 0xc9d9ff : (inWing ? STATUS_TINT[st] : 0xe9ebee);
       for (const fm of p.floorMats) { fm.color.setHex(tint); fm.transparent = dim; fm.opacity = dim ? 0.35 : 1; fm.emissive.setHex(sel && !apt ? 0x1d4ed8 : 0x000000); fm.emissiveIntensity = sel && !apt ? 0.1 : 0; }
       p.wallMat.color.setHex(0xfdfdfb); p.wallMat.emissive.setHex(sel && !apt ? 0x2563eb : 0x000000); p.wallMat.emissiveIntensity = sel && !apt ? 0.35 : 0;
-      p.walls.visible = !dim;
-      if (p.glass) p.glass.visible = !dim;
+      const showInt = apt && sel && state.furnished;
+      if (showInt) interiorFor(k).group.visible = true; else if (interiors[k]) interiors[k].group.visible = false;
+      p.walls.visible = !dim && !showInt;
+      if (p.glass) p.glass.visible = !dim && !showInt;
+      for (const r of p.rooms) r.mesh.visible = !showInt;
     }
     invalidate();
   }
@@ -496,7 +500,7 @@ export function createViewer(root, hooks = {}) {
     wing: w => { const c = W(w === 'A' ? 11 : 32.1, 12.6, 11); return [c.clone().add(fit(new THREE.Vector3(w === 'A' ? -44 : 40, 28, 54))), c]; },
     floor: (w, f) => { const c = W(w === 'A' ? 11.5 : 31.6, 13, f * FH); return [c.clone().add(fit(new THREE.Vector3(w === 'A' ? -22 : 22, 44, 40))), c]; },
     flat: k => { const p = flatParts[k], c = p.center.clone(); c.y = state.floor * FH + 0.5; const s = p.box.getSize(new THREE.Vector3()).length(); return [c.clone().add(fit(new THREE.Vector3(-0.6 * s - 8, 1.5 * s + 14, 1.0 * s + 14))), c]; },
-    apt: k => { const p = flatParts[k], c = p.center.clone(); c.y = state.floor * FH + 0.4; const s = p.box.getSize(new THREE.Vector3()).length(); return [c.clone().add(fit(new THREE.Vector3(-0.55 * s, 1.15 * s + 3, 0.9 * s + 1))), c]; }
+    apt: k => { const p = flatParts[k], c = p.center.clone(); c.y = state.floor * FH + 0.4; const s = p.box.getSize(new THREE.Vector3()).length(); const o = state.furnished ? new THREE.Vector3(-0.42 * s, 1.38 * s + 3.6, 0.8 * s + 1.4) : new THREE.Vector3(-0.55 * s, 1.15 * s + 3, 0.9 * s + 1); return [c.clone().add(fit(o)), c]; }
   };
 
   /* ---------- public API ---------- */
@@ -505,7 +509,9 @@ export function createViewer(root, hooks = {}) {
     home() { Object.assign(state, { mode: 'site', wing: null, floor: null, flat: null }); controls.minDistance = 6; applyMode(); flyTo(...VIEW.site()); },
     selectWing(w) { Object.assign(state, { mode: 'wing', wing: w, floor: null, flat: null }); applyMode(); flyTo(...VIEW.wing(w)); },
     selectFloor(f) { if (!state.wing) state.wing = 'A'; Object.assign(state, { mode: 'floor', floor: f, flat: null }); applyMode(); flyTo(...VIEW.floor(state.wing, f)); },
-    selectFlat(key) { const F = FLATS[key]; state.wing = F.wing; if (!state.floor) state.floor = 5; Object.assign(state, { mode: 'flat', flat: key }); applyMode(); flyTo(...VIEW.flat(key)); },
+    selectFlat(key) { const F = FLATS[key]; state.wing = F.wing; if (!state.floor) state.floor = 5; Object.assign(state, { mode: 'flat', flat: key }); applyMode(); flyTo(...VIEW.flat(key)); setTimeout(() => prewarm(key), 1500); },
+    interiorDebug(key) { return interiorFor(key).debug; },
+    setFurnished(on) { state.furnished = !!on; applyMode(); if (state.mode === 'apt') flyTo(...VIEW.apt(state.flat), 900); },
     explore() { if (!state.flat) return; state.mode = 'apt'; applyMode(); controls.minDistance = 4; flyTo(...VIEW.apt(state.flat), 1600); },
     topView() { if (!state.flat) return; const p = flatParts[state.flat], c = p.center.clone(); c.y = state.floor * FH; const s = p.box.getSize(new THREE.Vector3()).length(); flyTo(c.clone().add(new THREE.Vector3(0.001, 1.9 * s + 4, 0.35)), c, 1000); },
     view3d() { if (state.flat) flyTo(...VIEW.apt(state.flat), 1000); },
