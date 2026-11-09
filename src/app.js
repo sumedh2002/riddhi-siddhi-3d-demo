@@ -270,8 +270,11 @@ try {
   v = createViewer(root, { onMode: () => {}, onSelect: render, onHover, onFrame: () => v && onFrame(), onInteract });
   render();
   window.__viewer = v;
-  const deep = new URLSearchParams(location.search).get('flat'); // e.g. ?flat=A-506 (links from the sales console)
-  if (deep) { document.getElementById('explore').scrollIntoView(); setTimeout(() => goToFlat(deep), 300); }
+  const qs = new URLSearchParams(location.search), deep = qs.get('flat'); // e.g. ?flat=A-506&inside=1 (links from the sales console)
+  if (deep) {
+    document.getElementById('explore').scrollIntoView();
+    setTimeout(() => { if (goToFlat(deep) && qs.get('inside')) setTimeout(() => { v.explore(); render(); }, 1500); }, 300);
+  }
 } catch (err) {
   root.classList.add('v-failed');
   root.querySelector('.v-fallback').hidden = false;
