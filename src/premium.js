@@ -14,7 +14,7 @@ export const PREMIUM = {
     dir: 'premium/a-506/',
     start: 'living',
     views: [
-      { id: 'living', name: 'Living room', room: 6, p: [6.9, 21.3], look: [4.6, 22.6], sets: { 'day-tile': 'living' },
+      { id: 'living', name: 'Living room', room: 6, p: [6.9, 21.3], look: [4.4, 20.9], sets: { 'day-tile': 'living' },
         links: [{ to: 'dining', at: [5.0, 19.78] }, { to: 'kitchen', at: [4.85, 22.75] }, { to: 'bed1', at: [3.95, 19.95] }, { to: 'bed2', at: [4.25, 18.91] }] },
       { id: 'dining', name: 'Dining', room: 5, p: [5.0, 19.78], look: [7.6, 22.9], sets: { 'day-tile': 'dining' },
         links: [{ to: 'living', at: [6.9, 21.3] }, { to: 'kitchen', at: [4.85, 22.75] }, { to: 'bed1', at: [3.95, 19.95] }, { to: 'bed2', at: [4.25, 18.91] }] },
