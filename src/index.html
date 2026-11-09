@@ -349,6 +349,14 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
 .w-views b{display:block;font:500 13px/1.25 var(--w-f);color:var(--w-ink)}
 .w-views small{display:block;margin-top:3px;font:400 11.5px/1.2 var(--w-m);color:var(--w-ink-3)}
 
+/* hide / show the side panel so the view can use the full width */
+.v-panel{transition:transform .35s cubic-bezier(.2,.7,.2,1),opacity .35s}
+#viewer.v-collapsed{--w-side:0px}
+#viewer.v-collapsed .v-panel{transform:translateX(calc(100% + 16px));opacity:0;pointer-events:none}
+.v-side{position:absolute;z-index:4;top:50%;right:var(--w-side);transform:translateY(-50%);display:grid;place-items:center;width:22px;height:56px;padding:0;border:1px solid var(--w-line);border-right:0;border-radius:8px 0 0 8px;background:var(--w-glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:var(--w-shadow-s);color:var(--w-ink-2);cursor:pointer}
+.v-side:hover{color:var(--w-ink);background:var(--w-bg)}
+.v-side svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;transition:transform .3s}
+#viewer.v-collapsed .v-side svg{transform:rotate(180deg)}
 /* medium widths: plan switch and hint move clear of the crumbs and toolbar */
 @container v (max-width: 1100px){
   .v-plan{right:auto;left:12px;top:56px}
@@ -359,6 +367,9 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
   .v-canvas{height:var(--ch)}
   .v-labels{bottom:auto;height:var(--ch)}
   .v-panel{position:relative;inset:auto;width:auto;border:0;border-top:1px solid var(--w-line);border-radius:0;box-shadow:none}
+  .v-side{display:none}
+  #viewer.v-collapsed .v-panel{transform:none;opacity:1;pointer-events:auto}
+  #viewer.v-collapsed{--w-side:372px}
   .v-body{overflow:visible}
   .w-head,.w-sec,.w-foot{padding-left:16px;padding-right:16px}
   .w-foot{position:static}
@@ -493,6 +504,7 @@ footer b{color:#fff;font-family:var(--f-d);letter-spacing:.06em}
       <div class="v-photo" hidden><div class="v-photo-rooms" role="group" aria-label="Rooms"></div><span class="v-photo-hint" aria-hidden="true">Drag to look around</span></div>
       <div class="v-topbar"><nav class="v-crumbs" aria-label="Where you are"></nav></div>
       <aside class="v-panel" aria-label="Flat selection"><div class="v-body"></div></aside>
+      <button class="v-side" data-act="side" aria-label="Hide details" aria-expanded="true" title="Hide details"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
       <div class="v-tools">
         <div class="w-tb" role="toolbar" aria-label="3D view">
           <button data-act="zin" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>

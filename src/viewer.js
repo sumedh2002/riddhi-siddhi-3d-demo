@@ -523,6 +523,7 @@ export function createViewer(root, hooks = {}) {
     project(v) { const p = v.clone().project(camera); const r = renderer.domElement.getBoundingClientRect(); return { x: (p.x + 1) / 2 * r.width, y: (1 - p.y) / 2 * r.height, z: p.z }; },
     azimuth() { return controls.getAzimuthalAngle(); },
     setAutoRotate(v) { controls.autoRotate = v; invalidate(); },
+    layout() { resize(); }, // call after the side panel is hidden or shown
     renderer, scene, camera
   };
 
@@ -566,7 +567,7 @@ export function createViewer(root, hooks = {}) {
   function resize() {
     const w = canvasWrap.clientWidth, h = canvasWrap.clientHeight;
     renderer.setSize(w, h, false);
-    const side = w > 820 ? 186 : 0; // half the side panel (360 px + 12 px inset), so the model centres in the free area
+    const side = w > 820 && !root.classList.contains('v-collapsed') ? 186 : 0; // half the side panel (360 px + 12 px inset), so the model centres in the free area
     camera.aspect = (w + 2 * side) / h;
     if (side) camera.setViewOffset(w + 2 * side, h, 2 * side, 0, w, h); else camera.clearViewOffset();
     camera.updateProjectionMatrix(); invalidate();

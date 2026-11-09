@@ -275,6 +275,7 @@ root.addEventListener('click', e => {
   else if (d.act === 'zout') { v.zoom(1.33); return; }
   else if (d.act === 'reset') { v.reset(); return; }
   else if (d.act === 'full') { toggleFull(); return; }
+  else if (d.act === 'side') { const c = root.classList.toggle('v-collapsed'); t.setAttribute('aria-expanded', String(!c)); t.setAttribute('aria-label', c ? 'Show details' : 'Hide details'); t.title = t.getAttribute('aria-label'); v.layout(); onFrame(); return; }
   else return;
   hint.classList.add('gone');
   render();
