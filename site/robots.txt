@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /playground/
+Sitemap: https://arch3.in/sitemap.xml

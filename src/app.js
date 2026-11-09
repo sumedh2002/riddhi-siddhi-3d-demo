@@ -359,17 +359,20 @@ function enquire(id, type) {
   if (fsEl()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
   if (root.classList.contains('v-full')) setFull(false);
   const f = document.getElementById('enquiry');
+  if (!f) { // embedded on its own (e.g. the Arch3 playground): no host form, so show what the builder would receive
+    toast(`<b>Enquiry for ${esc(id)}</b><span>${esc(type)} · on a builder's site this goes to their CRM</span>`); return;
+  }
   f.unit.value = id; f.type.value = type;
   document.getElementById('enquire').scrollIntoView({ behavior: 'smooth', block: 'start' });
   setTimeout(() => f.name.focus({ preventScroll: true }), 700);
 }
 document.querySelectorAll('[data-demo]').forEach(b => b.addEventListener('click', () => {
   const [key, fl] = b.dataset.demo.split('@');
-  document.getElementById('explore').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('explore')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   setTimeout(() => { v.state.wing = FLATS[key].wing; v.state.floor = +fl; v.selectFlat(key); render(); setTimeout(() => { v.explore(); render(); }, 1500); }, 600);
 }));
 const form = document.getElementById('enquiry');
-form.addEventListener('submit', e => {
+if (form) form.addEventListener('submit', e => {
   e.preventDefault();
   const d = Object.fromEntries(new FormData(form));
   const out = document.getElementById('lead');
@@ -380,8 +383,8 @@ form.addEventListener('submit', e => {
 
 /* ---------- header menu ---------- */
 const mb = document.getElementById('menu-btn'), nav = document.getElementById('site-nav');
-mb.addEventListener('click', () => { const o = nav.classList.toggle('open'); mb.setAttribute('aria-expanded', o); });
-nav.addEventListener('click', e => { if (e.target.closest('a')) { nav.classList.remove('open'); mb.setAttribute('aria-expanded', 'false'); } });
+if (mb && nav) mb.addEventListener('click', () => { const o = nav.classList.toggle('open'); mb.setAttribute('aria-expanded', o); });
+if (mb && nav) nav.addEventListener('click', e => { if (e.target.closest('a')) { nav.classList.remove('open'); mb.setAttribute('aria-expanded', 'false'); } });
 
 /* ---------- boot ---------- */
 const theme = new URLSearchParams(location.search).get('theme'); // ?theme=dark for embeds on dark pages
@@ -394,7 +397,7 @@ try {
   const qs = new URLSearchParams(location.search), deep = qs.get('flat');
   if (!deep && qs.get('plan') === 'premium' && PREMIUM_SITE) { prem.on = true; render(); } // e.g. ?flat=A-506&inside=1 (links from the sales console)
   if (deep) {
-    document.getElementById('explore').scrollIntoView();
+    document.getElementById('explore')?.scrollIntoView();
     setTimeout(() => { if (goToFlat(deep) && qs.get('inside')) setTimeout(() => { // &plan=basic | premium picks the plan to open with
       const pl = qs.get('plan'); if (pl === 'basic') v.state.furnished = false; v.explore(); if (pl === 'premium') prem.on = true; render(); }, 1500); }, 300);
   }
