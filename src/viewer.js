@@ -566,7 +566,7 @@ export function createViewer(root, hooks = {}) {
   function resize() {
     const w = canvasWrap.clientWidth, h = canvasWrap.clientHeight;
     renderer.setSize(w, h, false);
-    const side = w > 820 ? 178 : 0;
+    const side = w > 820 ? 186 : 0; // half the side panel (360 px + 12 px inset), so the model centres in the free area
     camera.aspect = (w + 2 * side) / h;
     if (side) camera.setViewOffset(w + 2 * side, h, 2 * side, 0, w, h); else camera.clearViewOffset();
     camera.updateProjectionMatrix(); invalidate();

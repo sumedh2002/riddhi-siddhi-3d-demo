@@ -1,5 +1,6 @@
 import { createViewer, DATA, statusOf, unitId } from './viewer.js';
-import { subscribe, lastUpdated, STATUS_LABEL } from './inventory.js';
+import { subscribe, lastUpdated, counts, STATUSES, STATUS_LABEL } from './inventory.js';
+import { PROJECT } from './project-data.js';
 
 const { FLATS, NF } = DATA;
 const root = document.getElementById('viewer');
@@ -13,10 +14,12 @@ const ST = STATUS_LABEL;
 const toastEl = root.querySelector('.v-toast');
 const flatsOfWing = w => Object.keys(FLATS).filter(k => FLATS[k].wing === w).sort();
 const bhk = k => FLATS[k].bhk + ' BHK';
+const shortName = PROJECT.short || PROJECT.name.replace(/\s+Apartments?$/i, '');
 let v = null;
-// room labels in the furnished view: on by default on larger screens, off on phones (the flat stays clear)
+let topCam = false; // inside a flat: top-down camera on/off
+// room labels in the furnished view: on by default on wide widgets, off on narrow ones (the flat stays clear)
 const lblBtn = root.querySelector('.v-tools [data-act="labels"]');
-const isPhone = () => window.matchMedia && matchMedia('(max-width: 820px)').matches;
+const isPhone = () => root.clientWidth <= 820;
 let labelsPref = null;
 const labelsOn = () => labelsPref === null ? !isPhone() : labelsPref;
 const planEl = root.querySelector('.v-plan');
@@ -31,71 +34,96 @@ function syncLabelMode() {
   lblBtn.setAttribute('aria-pressed', String(furn && labelsOn()));
 }
 
-function availCount(w, f) { return flatsOfWing(w).filter(k => statusOf(unitId(w, f, FLATS[k].n)) === 'available').length; }
-function wingAvail(w) { let s = 0; for (let f = 1; f <= NF; f++) s += availCount(w, f); return s; }
-const chip = st => `<span class="chip chip-${st}">${ST[st]}</span>`;
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const svg = d => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  left: svg('<path d="M15 18l-6-6 6-6"/>'),
+  right: svg('<path d="M9 18l6-6-6-6"/>'),
+  up: svg('<path d="M18 15l-6-6-6 6"/>'),
+  down: svg('<path d="M6 9l6 6 6-6"/>'),
+  arrow: svg('<path d="M5 12h14M13 6l6 6-6 6"/>')
+};
+const st = s => `<span class="w-st st-${s}"><i></i>${ST[s]}</span>`;
+const badge = s => `<span class="w-st w-badge st-${s}"><i></i>${ST[s]}</span>`;
+const clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const legend = `<div class="w-legend">${STATUSES.map(s => `<span><i class="w-sq s-${s}"></i>${ST[s]}</span>`).join('')}</div>`;
+const brand = `<span class="w-brand">3D explorer by <b>Arch3</b></span>`;
+const bar = c => `<span class="w-bar" aria-hidden="true">${STATUSES.map(s => c[s] ? `<i class="s-${s}" style="flex:${c[s]}"></i>` : '').join('')}</span>`;
+function head(meta, title, sub, aside = '') {
+  const t = lastUpdated();
+  return `<div class="w-head"><div class="w-meta"><span>${meta}</span><span class="w-live" title="Availability is updated live by the sales team"><i></i>Live${t ? ' · ' + clock(t) : ''}</span></div>
+    <div class="w-title"><h3>${title}</h3>${aside}</div>${sub ? `<p class="w-sub">${sub}</p>` : ''}</div>`;
+}
+const sec = (label, body, aside = '') => `<div class="w-sec">${label ? `<div class="w-lbl"><span>${label}</span>${aside ? `<span>${aside}</span>` : ''}</div>` : ''}${body}</div>`;
 
 function keyPlan(w, f) {
   const xs = w === 'A' ? [0.6, 22.2] : [20.9, 42.6], sc = 9.2, H = 25.6 * sc, Wd = (xs[1] - xs[0]) * sc;
-  let s = `<svg viewBox="0 0 ${Wd.toFixed(0)} ${H.toFixed(0)}" class="kp" role="img" aria-label="Key plan of ${w} wing, floor ${f}">`;
-  s += `<rect x="0" y="0" width="${Wd}" height="${H}" fill="none"/>`;
+  let s = `<svg viewBox="0 0 ${Wd.toFixed(0)} ${H.toFixed(0)}" class="kp" style="aspect-ratio:${Wd.toFixed(0)}/${H.toFixed(0)}" role="img" aria-label="Key plan of ${w} wing, floor ${f}">`;
   for (const k of flatsOfWing(w)) {
-    const F = FLATS[k], st = statusOf(unitId(w, f, F.n)), sel = v && v.state.flat === k;
-    s += `<g class="kp-flat ${sel ? 'sel' : ''} kp-${st}" data-flat="${k}">`;
+    const F = FLATS[k], s0 = statusOf(unitId(w, f, F.n)), sel = v && v.state.flat === k;
+    s += `<g class="kp-flat ${sel ? 'sel' : ''} kp-${s0}" data-flat="${k}">`;
     for (const r of F.rooms) s += `<rect x="${((r[2] - xs[0]) * sc).toFixed(1)}" y="${(r[3] * sc).toFixed(1)}" width="${((r[4] - r[2]) * sc).toFixed(1)}" height="${((r[5] - r[3]) * sc).toFixed(1)}"/>`;
     const cx = F.rooms.reduce((a, r) => a + (r[2] + r[4]) / 2, 0) / F.rooms.length, cy = F.rooms.reduce((a, r) => a + (r[3] + r[5]) / 2, 0) / F.rooms.length;
-    s += `<text x="${((cx - xs[0]) * sc).toFixed(0)}" y="${(cy * sc + 4).toFixed(0)}">${f}${F.n}</text></g>`;
+    s += `<text x="${((cx - xs[0]) * sc).toFixed(0)}" y="${(cy * sc + 3.5).toFixed(0)}">${f}${F.n}</text></g>`;
   }
   s += `<text class="kp-road" x="${Wd / 2}" y="${H - 2}">11 m road ↓</text></svg>`;
-  return s;
+  const key = STATUSES.map(x => `<span><i class="w-sq k-${x}"></i>${ST[x]}</span>`).join('') + (v && v.state.flat && v.state.mode !== 'floor' ? '<span><i class="w-sq k-sel"></i>This flat</span>' : '');
+  return `<div class="w-kp">${s}<div class="w-kp-key">${key}</div></div>`;
 }
 
 function render(keepScroll) {
   if (!v) return;
   const prevScroll = panel.scrollTop;
   const S = v.state, w = S.wing, f = S.floor, k = S.flat;
+  if (S.mode !== 'apt') topCam = false;
   // crumbs
-  let c = `<button data-go="home">Project</button>`;
-  if (w) c += `<span>›</span><button data-go="wing">${w} Wing</button>`;
-  if (f) c += `<span>›</span><button data-go="floor">Floor ${f}</button>`;
-  if (k) c += `<span>›</span><button data-go="flat">${unitId(w, f, FLATS[k].n)}</button>`;
-  crumbs.innerHTML = c;
+  const cr = [['home', shortName]];
+  if (w) cr.push(['wing', `${w} Wing`]);
+  if (f) cr.push(['floor', `Floor ${f}`]);
+  if (k) cr.push(['flat', unitId(w, f, FLATS[k].n)]);
+  crumbs.innerHTML = cr.map(([go, t], i) => `${i ? '<span class="sl" aria-hidden="true">/</span>' : ''}<button data-go="${go}"${i === cr.length - 1 ? ' aria-current="location"' : ''}>${t}</button>`).join('');
   let h = '';
   if (S.mode === 'site') {
-    h = `<p class="v-eyebrow">3D explorer</p><h3>Find your home</h3><p class="v-sub">Pick a wing, then your floor and flat. Or type your flat number.</p>
-    <form class="v-search" data-search><label class="sr" for="vq">Flat number</label><input id="vq" name="q" placeholder="e.g. A-506" autocomplete="off"><button type="submit">Go</button></form><p class="v-err" hidden></p>
-    <div class="v-wings">${['A', 'B'].map(x => `<button class="v-wing" data-wing="${x}"><span class="v-wing-n">${x}</span><span><strong>${x} Wing</strong><small>7 floors · 8 homes per floor · 1 &amp; 2 BHK</small></span><em>${wingAvail(x)} available</em></button>`).join('')}</div>
-    <div class="v-legend"><span><i class="d-available"></i>Available</span><span><i class="d-hold"></i>On hold</span><span><i class="d-booked"></i>Booked</span><span><i class="d-sold"></i>Sold</span></div>
-    <p class="v-live"><i></i>Availability is updated live by the sales team${lastUpdated() ? ` · last change ${new Date(lastUpdated()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}</p>`;
+    const all = counts();
+    h = head(esc(PROJECT.location.split(',').slice(-2).join(',').trim()), esc(PROJECT.name), `${all.total} homes in ${PROJECT.wings.length} wings. Choose a wing to see its floors, or go straight to a flat.`)
+      + sec('Go to a flat', `<form class="w-search" data-search role="search"><label class="w-sr" for="vq">Flat number</label><input id="vq" name="q" placeholder="Flat number, e.g. A-506" autocomplete="off" spellcheck="false" enterkeyhint="go"><button type="submit">Go${ICON.arrow}</button></form><p class="v-err" role="alert" hidden></p>`)
+      + sec('Wings', `<div class="w-list">${PROJECT.wings.map(x => {
+        const c = counts({ wing: x });
+        return `<button class="w-wing" data-wing="${x}" aria-label="${x} Wing, ${c.available} of ${c.total} available"><span class="w-wing-id">${x}</span><span class="w-wing-t"><b>${x} Wing</b><small>${NF} floors · ${c.total} homes · 1 &amp; 2 BHK</small></span><span class="w-wing-n"><b>${c.available}</b><small>of ${c.total}</small></span>${ICON.right}${bar(c)}</button>`;
+      }).join('')}</div>`, 'Available')
+      + sec('All homes', `<div class="w-totals">${STATUSES.map(s => `<div><i class="w-sq s-${s}"></i>${ST[s]}<b>${all[s]}</b></div>`).join('')}</div>`)
+      + `<div class="w-foot">${brand}</div>`;
   } else if (S.mode === 'wing') {
-    h = `<p class="v-eyebrow">${w} Wing</p><h3>Select your floor</h3><p class="v-sub">Each floor has 8 homes. Dots show what's available.</p><div class="v-floors">`;
+    const c = counts({ wing: w }), ks = flatsOfWing(w);
+    let rows = '';
     for (let fl = NF; fl >= 1; fl--) {
-      h += `<button class="v-floor" data-floor="${fl}"><strong>Floor ${fl}</strong><span class="dots">${flatsOfWing(w).map(x => `<i class="d-${statusOf(unitId(w, fl, FLATS[x].n))}"></i>`).join('')}</span><em>${availCount(w, fl)} available</em></button>`;
+      const ids = ks.map(x => unitId(w, fl, FLATS[x].n)), a = ids.filter(id => statusOf(id) === 'available').length;
+      rows += `<button class="w-mx-r" data-floor="${fl}" aria-label="Floor ${fl}, ${a} available"><span class="fl">${String(fl).padStart(2, '0')}</span><span class="w-mx-c">${ids.map(id => `<i class="s-${statusOf(id)}" title="${id} · ${ST[statusOf(id)]}"></i>`).join('')}</span><span class="av${a ? '' : ' zero'}">${a}</span></button>`;
     }
-    h += `</div>`;
+    h = head(esc(PROJECT.name), `${w} Wing`, `${c.available} of ${c.total} homes available. Each row is a floor and each square a flat. Choose a floor.`)
+      + sec('Stacking plan', `<div class="w-mx"><div class="w-mx-h" aria-hidden="true"><span>Floor</span><span class="w-mx-c">${ks.map(x => `<span>${FLATS[x].n}</span>`).join('')}</span><span>Avail.</span></div>${rows}</div>${legend}`)
+      + `<div class="w-foot"><button class="w-btn ghost" data-go="home">${ICON.left}All wings</button>${brand}</div>`;
   } else if (S.mode === 'floor' || (S.mode === 'flat' && !k)) {
-    h = `<div class="v-row"><div><p class="v-eyebrow">${w} Wing · X-ray view</p><h3>Floor ${f}</h3></div><div class="v-step"><button data-step="-1" aria-label="Floor below" ${f <= 1 ? 'disabled' : ''}>−</button><button data-step="1" aria-label="Floor above" ${f >= NF ? 'disabled' : ''}>+</button></div></div>
-    <p class="v-sub">Floors above are lifted away so you can see every home on this floor. Tap a flat.</p>
-    <div class="v-grid">${flatsOfWing(w).map(x => { const id = unitId(w, f, FLATS[x].n), st = statusOf(id); return `<button class="v-unit u-${st}" data-flat="${x}"><strong>${id}</strong><small>${bhk(x)} · ≈${FLATS[x].carpet} sq ft</small>${chip(st)}</button>`; }).join('')}</div>
-    <p class="v-label">Key plan</p>${keyPlan(w, f)}`;
+    const c = counts({ wing: w, floor: f });
+    const step = `<div class="w-step" role="group" aria-label="Change floor"><button data-step="-1" aria-label="Floor below" title="Floor below" ${f <= 1 ? 'disabled' : ''}>${ICON.down}</button><button data-step="1" aria-label="Floor above" title="Floor above" ${f >= NF ? 'disabled' : ''}>${ICON.up}</button></div>`;
+    h = head(`${w} Wing · X-ray view`, `Floor ${f}`, `${c.available} of ${c.total} available. Floors above are lifted away so you can see every home.`, step)
+      + sec('Flats', `<div class="w-units">${flatsOfWing(w).map(x => { const id = unitId(w, f, FLATS[x].n), s0 = statusOf(id); return `<button class="w-unit u-${s0}" data-flat="${x}"><span class="r1"><b>${id}</b>${st(s0)}</span><small>${bhk(x)} · ≈ ${FLATS[x].carpet} sq ft</small></button>`; }).join('')}</div>`)
+      + sec('Key plan', keyPlan(w, f))
+      + `<div class="w-foot"><button class="w-btn ghost" data-go="wing">${ICON.left}${w} Wing</button>${brand}</div>`;
   } else if (S.mode === 'flat') {
-    const F = FLATS[k], id = unitId(w, f, F.n), st = statusOf(id);
-    h = `<div class="v-row"><div><p class="v-eyebrow">${w} Wing · Floor ${f}</p><h3>Flat ${id}</h3></div>${chip(st)}</div>
-    <dl class="v-facts"><div><dt>Home</dt><dd>${bhk(k)}</dd></div><div><dt>Carpet*</dt><dd>≈ ${F.carpet} sq ft</dd></div><div><dt>Floor</dt><dd>${f} of ${NF}</dd></div><div><dt>Outlook</dt><dd>${F.view}</dd></div></dl>
-    <button class="v-btn v-btn-primary" data-act="explore">Explore inside in 3D <span aria-hidden="true">→</span></button>
-    <button class="v-btn" data-act="enquire">Enquire about ${id}</button>
-    <p class="v-label">Where it sits on the floor</p>${keyPlan(w, f)}
-    <p class="v-note">*Indicative, added up from the brochure's room sizes. Final carpet area as per the RERA agreement.</p>`;
+    const F = FLATS[k], id = unitId(w, f, F.n), s0 = statusOf(id);
+    h = head(`${w} Wing · Floor ${f}`, `Flat ${id}`, '', badge(s0))
+      + sec('', `<dl class="w-dl"><div><dt>Type</dt><dd>${bhk(k)}</dd></div><div><dt>Carpet area*</dt><dd class="mono">≈ ${F.carpet} sq ft</dd></div><div><dt>Floor</dt><dd>${f} of ${NF}</dd></div><div><dt>Outlook</dt><dd>${esc(F.view)}</dd></div></dl>`)
+      + sec('Position on the floor', `${keyPlan(w, f)}<p class="w-note">*Indicative, added up from the brochure's room sizes. Final carpet area as per the RERA agreement.</p>`)
+      + `<div class="w-foot w-foot-2"><button class="w-btn" data-act="enquire">Enquire</button><button class="w-btn pri" data-act="explore">Explore inside${ICON.arrow}</button></div>`;
   } else if (S.mode === 'apt') {
-    const F = FLATS[k], id = unitId(w, f, F.n), st = statusOf(id);
-    h = `<div class="v-row"><div><p class="v-eyebrow">Inside · ${bhk(k)} · ${S.furnished ? 'Pro' : 'Basic'}</p><h3>Flat ${id}</h3></div>${chip(st)}</div>
-    <div class="v-seg" role="group" aria-label="Plan"><button data-act="furn" class="${S.furnished ? 'on' : ''}">Pro · Furnished</button><button data-act="empty" class="${S.furnished ? '' : 'on'}">Basic · Empty</button></div>
-    <div class="v-seg" role="group" aria-label="Camera"><button data-act="v3d" class="on">3D view</button><button data-act="top">Top view</button></div>
-    <ul class="v-rooms">${F.rooms.map((r, i) => r[6] ? `<li data-room="${i}"><span>${esc(r[0])}</span><b>${esc(r[6])}</b></li>` : '').join('')}</ul>
-    <p class="v-note">${S.furnished ? '<b>Pro plan:</b> furnished 3D interiors, placed automatically from the floor plans. Furniture is indicative, to show scale.' : '<b>Basic plan:</b> the empty layout, with walls cut at 1.2 m so you can see every room.'} Room sizes as printed in the brochure.</p>
-    <button class="v-btn v-btn-primary" data-act="enquire">Enquire about ${id}</button>
-    <button class="v-btn" data-go="floor">← Back to floor ${f}</button>`;
+    const F = FLATS[k], id = unitId(w, f, F.n), s0 = statusOf(id), on = c => c ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"';
+    h = head(`Inside · ${bhk(k)} · ${w} Wing, floor ${f}`, `Flat ${id}`, '', badge(s0))
+      + sec('Interior', `<div class="w-seg" role="group" aria-label="Interior"><button data-act="furn"${on(S.furnished)}>Pro · Furnished</button><button data-act="empty"${on(!S.furnished)}>Basic · Empty</button></div>
+        <p class="w-note">${S.furnished ? 'Furniture is placed automatically from the floor plans. It is indicative, to show scale.' : 'The empty layout, with walls cut at 1.2 m so you can see into every room.'}</p>`)
+      + sec('Camera', `<div class="w-seg" role="group" aria-label="Camera"><button data-act="v3d"${on(!topCam)}>3D view</button><button data-act="top"${on(topCam)}>Top down</button></div>`)
+      + sec('Rooms', `<ul class="w-rooms">${F.rooms.map((r, i) => r[6] ? `<li data-room="${i}"><span>${esc(r[0])}</span><b>${esc(r[6])}</b></li>` : '').join('')}</ul>`, 'Size as per brochure')
+      + `<div class="w-foot w-foot-2"><button class="w-btn" data-go="floor">${ICON.left}Floor ${f}</button><button class="w-btn pri" data-act="enquire">Enquire about ${id}</button></div>`;
   }
   panel.innerHTML = h;
   panel.scrollTop = keepScroll ? prevScroll : 0;
@@ -110,12 +138,12 @@ function buildLabels() {
   if (S.mode === 'floor') {
     for (const k of flatsOfWing(S.wing)) {
       const p = v.flatParts[k], el = document.createElement('button'), id = unitId(S.wing, S.floor, FLATS[k].n);
-      el.className = 'pin pin-' + statusOf(id); el.textContent = id.split('-')[1]; el.dataset.flat = k; labels.appendChild(el);
+      el.className = 'pin pin-' + statusOf(id); el.innerHTML = `<i></i>${id.split('-')[1]}`; el.setAttribute('aria-label', `${id}, ${ST[statusOf(id)]}`); el.dataset.flat = k; labels.appendChild(el);
       labelItems.push({ el, pos: p.center.clone().setY(S.floor * 3 + 1.6) });
     }
   } else if (S.mode === 'flat') {
     const p = v.flatParts[S.flat], el = document.createElement('div');
-    el.className = 'pin pin-big'; el.innerHTML = `<b>${unitId(S.wing, S.floor, FLATS[S.flat].n)}</b> ${bhk(S.flat)}`; labels.appendChild(el);
+    el.className = 'pin pin-big'; el.innerHTML = `<b>${unitId(S.wing, S.floor, FLATS[S.flat].n)}</b><span>${bhk(S.flat)}</span>`; labels.appendChild(el);
     labelItems.push({ el, pos: p.center.clone().setY(S.floor * 3 + 2.2) });
   } else if (S.mode === 'apt') {
     const rooms = FLATS[S.flat].rooms;
@@ -166,12 +194,11 @@ root.addEventListener('click', e => {
   else if (d.floor) v.selectFloor(+d.floor);
   else if (d.step) { const nf = Math.min(NF, Math.max(1, S.floor + +d.step)); v.selectFloor(nf); }
   else if (d.flat) v.selectFlat(d.flat);
-  else if (d.act === 'explore') v.explore();
+  else if (d.act === 'explore') { topCam = false; v.explore(); }
   else if (d.act === 'labels') { labelsPref = !labelsOn(); syncLabelMode(); onFrame(); return; }
-  else if (d.room !== undefined && t.closest('.v-rooms')) { labels.querySelectorAll('.rlabel').forEach(l => l.classList.toggle('hot', l.dataset.room === d.room)); onFrame(); return; }
-  else if (d.act === 'furn' || d.act === 'empty') { v.setFurnished(d.act === 'furn'); render(true); return; }
-  else if (d.act === 'top') { v.topView(); t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); return; }
-  else if (d.act === 'v3d') { v.view3d(); t.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); return; }
+  else if (d.room !== undefined && t.closest('.w-rooms')) { labels.querySelectorAll('.rlabel').forEach(l => l.classList.toggle('hot', l.dataset.room === d.room)); onFrame(); return; }
+  else if (d.act === 'furn' || d.act === 'empty') { topCam = false; v.setFurnished(d.act === 'furn'); render(true); return; }
+  else if (d.act === 'top' || d.act === 'v3d') { topCam = d.act === 'top'; topCam ? v.topView() : v.view3d(); t.parentElement.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b === t); b.setAttribute('aria-pressed', String(b === t)); }); return; }
   else if (d.act === 'enquire') { enquire(unitId(S.wing, S.floor, FLATS[S.flat].n), bhk(S.flat)); return; }
   else if (d.act === 'zin') { v.zoom(0.75); return; }
   else if (d.act === 'zout') { v.zoom(1.33); return; }
@@ -203,8 +230,8 @@ function toast(html) {
 subscribe(e => {
   if (!v) return;
   v.refresh(); render(true);
-  if (e.type === 'unit' && e.remote) toast(`<b>Live update</b> · Flat ${e.id} is now <span class="chip chip-${statusOf(e.id)}">${ST[statusOf(e.id)]}</span>`);
-  if (e.type === 'reset' && e.remote) toast('<b>Live update</b> · Availability was reset');
+  if (e.type === 'unit' && e.remote) toast(`<b>Live update</b><span>Flat ${e.id} is now</span>${st(statusOf(e.id))}`);
+  if (e.type === 'reset' && e.remote) toast('<b>Live update</b><span>Availability was reset</span>');
 });
 panel.addEventListener('pointerover', e => {
   const t = e.target.closest('[data-flat]'); if (t && (v.state.mode === 'floor' || v.state.mode === 'flat')) v.setHoverFlat(t.dataset.flat);
@@ -265,6 +292,8 @@ mb.addEventListener('click', () => { const o = nav.classList.toggle('open'); mb.
 nav.addEventListener('click', e => { if (e.target.closest('a')) { nav.classList.remove('open'); mb.setAttribute('aria-expanded', 'false'); } });
 
 /* ---------- boot ---------- */
+const theme = new URLSearchParams(location.search).get('theme'); // ?theme=dark for embeds on dark pages
+if (theme === 'dark' || theme === 'light') root.dataset.theme = theme;
 if (window.matchMedia && matchMedia('(pointer: coarse)').matches) hint.textContent = 'Drag to rotate · Pinch to zoom · Tap a wing';
 try {
   v = createViewer(root, { onMode: () => {}, onSelect: render, onHover, onFrame: () => v && onFrame(), onInteract });
