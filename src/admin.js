@@ -415,7 +415,7 @@ app.addEventListener('submit', e => {
     if (!auth.enabled) { saveSession({ email: email || 'sales.manager@demo', name: nameFrom(email || 'sales.manager'), demo: true }); go('inventory/A'); return; }
     if (!email || !password) { S.loginErr = 'Enter your work email and password.'; render(); return; }
     S.signingIn = true; S.loginErr = ''; render();
-    auth.signIn(email, password).then(u => { S.user = u; S.signingIn = false; saveSession(null); go('inventory/A'); },
+    auth.signIn(email, password).then(u => { saveSession(null); S.user = u; S.signingIn = false; S.loginErr = ''; go('inventory/A'); },
       err => { S.signingIn = false; S.loginErr = err.message; render(); const pw = document.getElementById('password'); if (pw) pw.focus(); });
     return;
   }
