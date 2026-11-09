@@ -51,10 +51,16 @@ create table if not exists public.staff (
   primary key (user_id, project_id)
 );
 
-create or replace function public.is_staff(p_project text) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.staff where user_id = auth.uid() and project_id = p_project);
+-- Helper used by the security rules. It lives in a private schema that the
+-- website API does not expose, so nobody can call it from outside.
+create schema if not exists private;
+grant usage on schema private to anon, authenticated;
+create or replace function private.is_staff(p_project text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.staff where user_id = (select auth.uid()) and project_id = p_project);
 $$;
+revoke all on function private.is_staff(text) from public;
+grant execute on function private.is_staff(text) to anon, authenticated;
 
 -- Row level security: nothing is readable or writable unless a policy allows it
 alter table public.units      enable row level security;
@@ -63,13 +69,13 @@ alter table public.activity   enable row level security;
 alter table public.staff      enable row level security;
 
 drop policy if exists "anyone reads availability" on public.units;
-create policy "anyone reads availability" on public.units for select using (true);
+create policy "anyone reads availability" on public.units for select to anon, authenticated using (true);
 drop policy if exists "staff read remarks" on public.unit_notes;
-create policy "staff read remarks" on public.unit_notes for select using (public.is_staff(project_id));
+create policy "staff read remarks" on public.unit_notes for select to authenticated using (private.is_staff(project_id));
 drop policy if exists "staff read history" on public.activity;
-create policy "staff read history" on public.activity for select using (public.is_staff(project_id));
+create policy "staff read history" on public.activity for select to authenticated using (private.is_staff(project_id));
 drop policy if exists "users read own staff row" on public.staff;
-create policy "users read own staff row" on public.staff for select using (user_id = auth.uid());
+create policy "users read own staff row" on public.staff for select to authenticated using (user_id = (select auth.uid()));
 -- There are deliberately no insert/update/delete policies: every change goes
 -- through the two functions below, which check that the caller is staff.
 
@@ -79,15 +85,14 @@ grant usage on schema public to anon, authenticated;
 revoke all on public.units, public.unit_notes, public.activity, public.staff from anon, authenticated;
 grant select on public.units to anon, authenticated;                                    -- statuses: public
 grant select on public.unit_notes, public.activity, public.staff to authenticated;      -- still filtered by the policies above
-grant execute on function public.is_staff(text) to anon, authenticated;
 
 -- Change one or many flats. p_remarks = null keeps the existing remarks.
 create or replace function public.set_units(p_project text, p_units text[], p_status text, p_remarks text default null)
-returns integer language plpgsql security definer set search_path = public as $$
+returns integer language plpgsql security definer set search_path = '' as $$
 declare
   n integer := 0; u text; prev text; prev_r text; who text; new_r text;
 begin
-  if not public.is_staff(p_project) then raise exception 'Not allowed: you are not staff on this project'; end if;
+  if not private.is_staff(p_project) then raise exception 'Not allowed: you are not staff on this project'; end if;
   if p_status not in ('available', 'hold', 'booked', 'sold') then raise exception 'Unknown status %', p_status; end if;
   select coalesce(s.name, au.email) into who
     from public.staff s join auth.users au on au.id = s.user_id
@@ -116,9 +121,9 @@ end $$;
 
 -- "Reset demo" in the sales console: back to the starting statuses, no remarks, no history.
 create or replace function public.reset_demo(p_project text) returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 begin
-  if not public.is_staff(p_project) then raise exception 'Not allowed: you are not staff on this project'; end if;
+  if not private.is_staff(p_project) then raise exception 'Not allowed: you are not staff on this project'; end if;
   update public.units set status = seed_status, updated_at = now() where project_id = p_project;
   delete from public.unit_notes where project_id = p_project;
   delete from public.activity where project_id = p_project;
@@ -129,6 +134,15 @@ revoke execute on function public.set_units(text, text[], text, text) from publi
 revoke execute on function public.reset_demo(text) from public, anon;
 grant execute on function public.set_units(text, text[], text, text) to authenticated;
 grant execute on function public.reset_demo(text) to authenticated;
+
+-- Tidy-ups: remove the old public helper (earlier version of this script) and keep
+-- Supabase's automatic-RLS trigger function out of the website API.
+drop function if exists public.is_staff(text);
+do $$ begin
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'rls_auto_enable') then
+    revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+  end if;
+end $$;
 
 -- Live updates: the website and the console hear about changes within a second
 do $$ begin
