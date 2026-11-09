@@ -73,6 +73,14 @@ create policy "users read own staff row" on public.staff for select using (user_
 -- There are deliberately no insert/update/delete policies: every change goes
 -- through the two functions below, which check that the caller is staff.
 
+-- Explicit API access. The project is created with "Automatically expose new
+-- tables" OFF, so nothing is reachable from the website unless granted here.
+grant usage on schema public to anon, authenticated;
+revoke all on public.units, public.unit_notes, public.activity, public.staff from anon, authenticated;
+grant select on public.units to anon, authenticated;                                    -- statuses: public
+grant select on public.unit_notes, public.activity, public.staff to authenticated;      -- still filtered by the policies above
+grant execute on function public.is_staff(text) to anon, authenticated;
+
 -- Change one or many flats. p_remarks = null keeps the existing remarks.
 create or replace function public.set_units(p_project text, p_units text[], p_status text, p_remarks text default null)
 returns integer language plpgsql security definer set search_path = public as $$
