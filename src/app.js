@@ -1,6 +1,7 @@
 import { createViewer, DATA, statusOf, unitId } from './viewer.js';
 import { subscribe, lastUpdated, counts, STATUSES, STATUS_LABEL } from './inventory.js';
 import { PROJECT } from './project-data.js';
+import { PREMIUM, PREMIUM_FINISHES, premiumShot } from './premium.js';
 
 const { FLATS, NF } = DATA;
 const root = document.getElementById('viewer');
@@ -23,10 +24,50 @@ const isPhone = () => root.clientWidth <= 820;
 let labelsPref = null;
 const labelsOn = () => labelsPref === null ? !isPhone() : labelsPref;
 const planEl = root.querySelector('.v-plan');
+/* Premium photo view (only for flats that have photos, see premium.js) */
+const photoEl = root.querySelector('.v-photo'), photoImgs = [...photoEl.querySelectorAll('img')], roomsBar = photoEl.querySelector('.v-photo-rooms');
+const premBtn = planEl.querySelector('[data-act="premium"]');
+const prem = { on: false, view: 'living', tod: 'day', fin: 'tile', x: 50 };
+const premData = () => { const S = v.state; return (S.mode === 'apt' && S.flat && PREMIUM[S.flat]) || null; };
+const tierOf = S => prem.on ? 'premium' : S.furnished ? 'furn' : 'empty';
+let shownPhoto = '';
+function showPhoto() {
+  const P = premData(); if (!P) return;
+  const view = P.views.find(x => x.id === prem.view) || P.views[0], s = premiumShot(view, prem.tod, prem.fin), url = P.dir + s.file + '.jpg';
+  prem.view = view.id;
+  roomsBar.innerHTML = P.views.map(x => `<button data-view="${x.id}"${x.id === view.id ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"'}>${esc(x.name)}</button>`).join('');
+  if (url === shownPhoto) return;
+  shownPhoto = url;
+  const cur = photoImgs.find(i => i.classList.contains('on')) || photoImgs[1], nxt = cur === photoImgs[0] ? photoImgs[1] : photoImgs[0];
+  nxt.onload = () => { if (shownPhoto !== url) return; nxt.classList.add('on'); cur.classList.remove('on'); };
+  nxt.alt = `${view.name}, ${s.tod === 'evening' ? 'evening' : 'daytime'}, ${PREMIUM_FINISHES[s.fin].toLowerCase()} floor (AI visualisation)`;
+  nxt.style.objectPosition = `${prem.x}% 50%`;
+  nxt.src = url;
+}
+function panPhoto() { photoImgs.forEach(i => { i.style.objectPosition = `${prem.x}% 50%`; }); }
+let pan = null;
+photoEl.addEventListener('pointerdown', e => {
+  if (e.target.closest('button')) return;
+  pan = { x: e.clientX, p: prem.x }; photoEl.classList.add('drag');
+  try { photoEl.setPointerCapture(e.pointerId); } catch (err) { /* not needed */ }
+});
+photoEl.addEventListener('pointermove', e => {
+  if (!pan) return;
+  const img = photoImgs.find(i => i.classList.contains('on')), ar = img && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 1.5;
+  const over = Math.max(1, photoEl.clientHeight * ar - photoEl.clientWidth); // how much of the photo is cropped off
+  prem.x = Math.min(100, Math.max(0, pan.p - (e.clientX - pan.x) / over * 100)); panPhoto();
+});
+['pointerup', 'pointercancel'].forEach(ev => photoEl.addEventListener(ev, () => { pan = null; photoEl.classList.remove('drag'); }));
 function syncLabelMode() {
-  const S = v.state, furn = S.mode === 'apt' && S.furnished;
+  const S = v.state;
+  if (!premData()) prem.on = false;
+  const furn = S.mode === 'apt' && S.furnished && !prem.on, tier = tierOf(S);
   planEl.hidden = S.mode !== 'apt';
-  planEl.querySelectorAll('button').forEach(b => { const on = (b.dataset.act === 'furn') === S.furnished; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  premBtn.hidden = !premData();
+  planEl.querySelectorAll('button').forEach(b => { const on = b.dataset.act === tier; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  root.classList.toggle('v-prem', prem.on);
+  photoEl.hidden = !prem.on;
+  if (prem.on) showPhoto();
   labels.classList.toggle('furn', furn);
   labels.classList.toggle('off', furn && !labelsOn());
   lblBtn.hidden = !furn;
@@ -118,12 +159,25 @@ function render(keepScroll) {
       + `<div class="w-foot w-foot-2"><button class="w-btn" data-act="enquire">Enquire</button><button class="w-btn pri" data-act="explore">Explore inside${ICON.arrow}</button></div>`;
   } else if (S.mode === 'apt') {
     const F = FLATS[k], id = unitId(w, f, F.n), s0 = statusOf(id), on = c => c ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"';
+    const P = PREMIUM[k], tier = P && prem.on ? 'premium' : S.furnished ? 'furn' : 'empty';
+    const tiers = `<div class="w-seg tiers" role="group" aria-label="Plan">${[['empty', 'Basic', 'Empty'], ['furn', 'Pro', 'Furnished'], ...(P ? [['premium', 'Premium', 'Photo']] : [])].map(([a, t, d]) => `<button data-act="${a}"${on(tier === a)}><b>${t}</b><span>${d}</span></button>`).join('')}</div>`;
+    const foot = `<div class="w-foot w-foot-2"><button class="w-btn" data-go="floor">${ICON.left}Floor ${f}</button><button class="w-btn pri" data-act="enquire">Enquire about ${id}</button></div>`;
+    if (tier === 'premium') {
+      const view = P.views.find(x => x.id === prem.view) || P.views[0], sh = premiumShot(view, prem.tod, prem.fin), keys = Object.keys(view.shots);
+      const fins = [...new Set(keys.map(x => x.split('-')[1]))], tods = [...new Set(keys.map(x => x.split('-')[0]))];
+      h = head(`Inside · ${bhk(k)} · ${w} Wing, floor ${f}`, `Flat ${id}`, '', badge(s0))
+        + sec('Interior', `${tiers}<p class="w-note">Photo-quality views made with AI from this flat's own 3D model, so walls, windows and doors match the plan. Indicative; final finishes as per the agreement.</p>`)
+        + sec('Views', `<ul class="w-views">${P.views.map(x => `<li><button data-view="${x.id}"${on(x.id === view.id)}><img src="${P.dir}t-${x.shots['day-tile']}.jpg" alt="" loading="lazy"><span><b>${esc(x.name)}</b><small>${esc(F.rooms[x.room][6] || '')}</small></span></button></li>`).join('')}</ul>`, 'Drag the photo to look around')
+        + (fins.length > 1 ? sec('Floor finish', `<div class="w-seg" role="group" aria-label="Floor finish">${fins.map(x => `<button data-fin="${x}"${on(sh.fin === x)}>${PREMIUM_FINISHES[x]}</button>`).join('')}</div><p class="w-note">Vitrified tile is the standard specification. The others show upgrade options.</p>`) : '')
+        + (tods.length > 1 ? sec('Light', `<div class="w-seg" role="group" aria-label="Time of day">${tods.map(x => `<button data-tod="${x}"${on(sh.tod === x)}>${x === 'day' ? 'Day' : 'Evening'}</button>`).join('')}</div>`) : '')
+        + foot;
+    } else
     h = head(`Inside · ${bhk(k)} · ${w} Wing, floor ${f}`, `Flat ${id}`, '', badge(s0))
-      + sec('Interior', `<div class="w-seg" role="group" aria-label="Interior"><button data-act="furn"${on(S.furnished)}>Pro · Furnished</button><button data-act="empty"${on(!S.furnished)}>Basic · Empty</button></div>
+      + sec('Interior', `${tiers}
         <p class="w-note">${S.furnished ? 'Furniture is placed automatically from the floor plans. It is indicative, to show scale.' : 'The empty layout, with walls cut at 1.2 m so you can see into every room.'}</p>`)
       + sec('Camera', `<div class="w-seg" role="group" aria-label="Camera"><button data-act="v3d"${on(!topCam)}>3D view</button><button data-act="top"${on(topCam)}>Top down</button></div>`)
       + sec('Rooms', `<ul class="w-rooms">${F.rooms.map((r, i) => r[6] ? `<li data-room="${i}"><span>${esc(r[0])}</span><b>${esc(r[6])}</b></li>` : '').join('')}</ul>`, 'Size as per brochure')
-      + `<div class="w-foot w-foot-2"><button class="w-btn" data-go="floor">${ICON.left}Floor ${f}</button><button class="w-btn pri" data-act="enquire">Enquire about ${id}</button></div>`;
+      + foot;
   }
   panel.innerHTML = h;
   panel.scrollTop = keepScroll ? prevScroll : 0;
@@ -197,7 +251,11 @@ root.addEventListener('click', e => {
   else if (d.act === 'explore') { topCam = false; v.explore(); }
   else if (d.act === 'labels') { labelsPref = !labelsOn(); syncLabelMode(); onFrame(); return; }
   else if (d.room !== undefined && t.closest('.w-rooms')) { labels.querySelectorAll('.rlabel').forEach(l => l.classList.toggle('hot', l.dataset.room === d.room)); onFrame(); return; }
-  else if (d.act === 'furn' || d.act === 'empty') { topCam = false; v.setFurnished(d.act === 'furn'); render(true); return; }
+  else if (d.act === 'furn' || d.act === 'empty') { const was = prem.on; prem.on = false; topCam = false; if (was && (d.act === 'furn') === S.furnished) render(true); else { v.setFurnished(d.act === 'furn'); render(true); } return; }
+  else if (d.act === 'premium') { prem.on = true; hint.classList.add('gone'); render(true); return; }
+  else if (d.view) { prem.view = d.view; prem.x = 50; panPhoto(); render(true); return; }
+  else if (d.fin) { prem.fin = d.fin; render(true); return; }
+  else if (d.tod) { prem.tod = d.tod; render(true); return; }
   else if (d.act === 'top' || d.act === 'v3d') { topCam = d.act === 'top'; topCam ? v.topView() : v.view3d(); t.parentElement.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b === t); b.setAttribute('aria-pressed', String(b === t)); }); return; }
   else if (d.act === 'enquire') { enquire(unitId(S.wing, S.floor, FLATS[S.flat].n), bhk(S.flat)); return; }
   else if (d.act === 'zin') { v.zoom(0.75); return; }
@@ -302,7 +360,8 @@ try {
   const qs = new URLSearchParams(location.search), deep = qs.get('flat'); // e.g. ?flat=A-506&inside=1 (links from the sales console)
   if (deep) {
     document.getElementById('explore').scrollIntoView();
-    setTimeout(() => { if (goToFlat(deep) && qs.get('inside')) setTimeout(() => { v.explore(); render(); }, 1500); }, 300);
+    setTimeout(() => { if (goToFlat(deep) && qs.get('inside')) setTimeout(() => { // &plan=basic | premium picks the plan to open with
+      const pl = qs.get('plan'); if (pl === 'basic') v.state.furnished = false; v.explore(); if (pl === 'premium') prem.on = true; render(); }, 1500); }, 300);
   }
 } catch (err) {
   root.classList.add('v-failed');

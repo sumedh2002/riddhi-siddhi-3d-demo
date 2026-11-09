@@ -24,5 +24,8 @@ async function page(entry, template) {
   fs.mkdirSync(OUT, { recursive: true });
   await page('app.js', 'index.html');
   await page('admin.js', 'admin.html');
+  // Premium photo views: copied as plain files next to the pages (loaded only when a visitor opens them)
+  const pdir = path.join(SRC, 'premium');
+  if (fs.existsSync(pdir)) { fs.cpSync(pdir, path.join(OUT, 'premium'), { recursive: true }); console.log('premium/   copied'); }
   console.log('->', OUT, 'build', BUILD);
 })().catch(e => { console.error(e); process.exit(1); });

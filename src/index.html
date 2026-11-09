@@ -311,6 +311,29 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
 .v-labels.furn.off .rlabel:not(.hot){display:none}
 #viewer.v-drag .v-labels.furn .rlabel:not(.hot){opacity:.12}
 
+/* Premium: photo-quality views at eye level (drag to look around) */
+.v-photo{position:absolute;left:0;top:0;bottom:0;right:calc(var(--w-side) - 8px);z-index:2;overflow:hidden;background:#15181c;cursor:grab;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+.v-photo.drag{cursor:grabbing}
+.v-photo>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s ease;pointer-events:none;-webkit-user-drag:none}
+.v-photo>img.on{opacity:1}
+.v-photo-rooms{position:absolute;left:12px;bottom:12px;display:flex;gap:2px;max-width:calc(100% - 210px);overflow-x:auto;padding:3px;background:var(--w-glass);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);border:1px solid var(--w-line);border-radius:10px;box-shadow:var(--w-shadow-s);scrollbar-width:none;cursor:default}
+.v-photo-rooms button{flex:none;border:0;background:transparent;padding:7px 11px;border-radius:7px;font:500 12.5px/1 var(--w-f);color:var(--w-ink-2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.v-photo-rooms button:hover{background:var(--w-bg-2);color:var(--w-ink)}
+.v-photo-rooms button.on{background:var(--w-accent);color:var(--w-accent-fg)}
+.v-photo-tag{position:absolute;right:20px;bottom:14px;padding:6px 9px;border-radius:7px;background:var(--w-scrim);color:#fff;font:500 11px/1 var(--w-f);pointer-events:none}
+#viewer.v-prem .v-tools,#viewer.v-prem .v-labels,#viewer.v-prem .v-hint{display:none}
+.w-seg.tiers button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px}
+.w-seg.tiers b{font-weight:600}
+.w-seg.tiers span{font-size:11.5px;color:var(--w-ink-3)}
+.w-seg.tiers button.on span{color:var(--w-ink-2)}
+.w-views{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.w-views button{display:flex;align-items:center;gap:12px;width:100%;padding:5px 10px 5px 5px;border:1px solid var(--w-line);border-radius:var(--w-r-s);background:var(--w-bg);text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.w-views button:hover{border-color:var(--w-ink-3)}
+.w-views button.on{border-color:var(--w-ink);box-shadow:inset 0 0 0 1px var(--w-ink)}
+.w-views img{flex:none;width:66px;height:44px;object-fit:cover;border-radius:5px;background:var(--w-bg-2)}
+.w-views b{display:block;font:500 13px/1.25 var(--w-f);color:var(--w-ink)}
+.w-views small{display:block;margin-top:3px;font:400 11.5px/1.2 var(--w-m);color:var(--w-ink-3)}
+
 /* medium widths: plan switch and hint move clear of the crumbs and toolbar */
 @container v (max-width: 1100px){
   .v-plan{right:auto;left:12px;top:56px}
@@ -329,6 +352,10 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
   .v-hint{left:50%;bottom:auto;top:calc(var(--ch) - 92px)}
   .v-plan{left:auto;right:10px;top:calc(var(--ch) - 94px)}
   .v-plan button{padding:7px 10px;font-size:12px}
+  .v-plan button span{display:none}
+  .v-photo{right:0;bottom:auto;height:var(--ch)}
+  .v-photo-rooms{left:10px;bottom:10px;max-width:calc(100% - 20px)}
+  .v-photo-tag{right:10px;bottom:auto;top:52px}
   .v-toast{left:50%;top:calc(var(--ch) - 146px);width:max-content;max-width:calc(100% - 24px);white-space:normal}
   .v-labels.furn .rlabel{padding:2px 7px}.v-labels.furn .rlabel b{font-size:10.5px}
   #viewer.v-full .v-canvas{flex:none;height:var(--ch)}
@@ -448,6 +475,7 @@ footer b{color:#fff;font-family:var(--f-d);letter-spacing:.06em}
     <div id="viewer" aria-label="Interactive 3D model of Riddhi Siddhi Apartment">
       <div class="v-canvas"></div>
       <div class="v-labels"></div>
+      <div class="v-photo" hidden><img alt=""><img alt=""><div class="v-photo-rooms" role="group" aria-label="Rooms"></div><span class="v-photo-tag">AI visualisation · indicative</span></div>
       <div class="v-topbar"><nav class="v-crumbs" aria-label="Where you are"></nav></div>
       <aside class="v-panel" aria-label="Flat selection"><div class="v-body"></div></aside>
       <div class="v-tools">
@@ -461,7 +489,7 @@ footer b{color:#fff;font-family:var(--f-d);letter-spacing:.06em}
         </div>
         <span class="v-compass" aria-hidden="true" title="Direction of the 11 m road"><i></i></span>
       </div>
-      <div class="v-plan" role="group" aria-label="Compare plans" hidden><button data-act="furn"><b>Pro</b> · Furnished</button><button data-act="empty"><b>Basic</b> · Empty</button></div>
+      <div class="v-plan" role="group" aria-label="Compare plans" hidden><button data-act="empty"><b>Basic</b><span> · Empty</span></button><button data-act="furn"><b>Pro</b><span> · Furnished</span></button><button data-act="premium" hidden><b>Premium</b><span> · Photo</span></button></div>
       <button class="v-exit" data-act="full" aria-label="Exit full screen"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <p class="v-hint">Drag to rotate · Scroll to zoom · Click a wing</p>
       <div class="v-tip" hidden></div>
