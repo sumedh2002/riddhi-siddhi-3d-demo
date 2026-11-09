@@ -105,10 +105,10 @@ function typeCounts(bhk, status) { return UNITS.filter(u => String(FLATS[u.key].
 function shell(content, ins = true) {
   const n = S.user.name, logN = recentLog(60).length;
   const on = v => S.view === v ? 'on' : '';
-  return `<header class="mtop"><button class="burger" data-act="drawer" aria-label="Open menu">${I.menu}</button><span class="logo">${I.logo}Storey3D</span><span class="av" aria-hidden="true">${esc(initials(n))}</span></header>
+  return `<header class="mtop"><button class="burger" data-act="drawer" aria-label="Open menu">${I.menu}</button><span class="logo">${I.logo}Arch3</span><span class="av" aria-hidden="true">${esc(initials(n))}</span></header>
   <div class="shell ${ins ? '' : 'no-ins'}">
     <aside class="rail ${S.drawer ? 'open' : ''}" aria-label="Main navigation">
-      <div class="rail-top"><span class="logo">${I.logo}Storey3D</span><button class="rail-close" data-act="drawer-close" aria-label="Close menu">${I.x}</button></div>
+      <div class="rail-top"><span class="logo">${I.logo}Arch3</span><button class="rail-close" data-act="drawer-close" aria-label="Close menu">${I.x}</button></div>
       <form class="rail-search" data-goto role="search">${I.search}<label class="sr" for="rs">Find a flat</label><input id="rs" name="q" placeholder="Find flat, e.g. A-506" autocomplete="off"><span class="kbd" aria-hidden="true">/</span></form>
       <div class="proj-pill"><img src="${THUMB}" alt=""><div><b>${esc(PROJECT.name)}</b><small>Sector 3, Pushpak Nagar</small></div></div>
       <nav class="nav" aria-label="Sections">
@@ -293,7 +293,7 @@ function activityPage() {
 }
 function loginPage() {
   return `<div class="login">
-    <section class="login-side"><span class="logo">${I.logo}Storey3D</span>
+    <section class="login-side"><span class="logo">${I.logo}Arch3</span>
       <div class="big"><h2>Keep every flat's status in step with your 3D website.</h2><p style="margin-top:12px">Mark a flat booked here and buyers see it on the project's 3D model straight away.</p></div>
       <p class="small" style="font-size:.8rem">Concept demo for ${esc(PROJECT.name)}</p></section>
     <main class="login-main"><div class="login-form">

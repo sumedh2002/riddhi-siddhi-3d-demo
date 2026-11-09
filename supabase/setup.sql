@@ -1,5 +1,5 @@
 -- =====================================================================
--- Storey3D · live flat availability (Riddhi Siddhi Apartment)
+-- Arch3 · live flat availability (Riddhi Siddhi Apartment)
 -- Run ONCE in Supabase: SQL Editor → New query → paste all of this → Run.
 -- Safe to run again: it won't duplicate anything.
 --

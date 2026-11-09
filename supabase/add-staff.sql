@@ -1,5 +1,5 @@
 -- =====================================================================
--- Storey3D · make a user staff on the project (run AFTER setup.sql)
+-- Arch3 · make a user staff on the project (run AFTER setup.sql)
 -- 1. First create the user: Authentication → Users → Add user → Create new user
 --    (tick "Auto Confirm User").
 -- 2. Replace the email (and the name shown in the change history) below, then Run.
