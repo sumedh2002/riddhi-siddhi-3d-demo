@@ -267,3 +267,17 @@ code{font:500 .92em var(--m)}
   *,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}
   .reveal.pre{opacity:1;transform:none}
 }
+
+/* document pages (privacy) */
+.doc .nav{position:sticky}
+.doc-back{display:inline-flex;margin-left:auto}
+.doc-body{max-width:calc(760px + 2 * var(--gut));padding-top:56px;padding-bottom:96px}
+.doc-body h1{margin-top:18px;font:600 clamp(34px,5vw,52px)/1.05 var(--f);letter-spacing:-.04em}
+.doc-meta{margin-top:14px;font:500 13px/1.5 var(--m);color:var(--ink-3)}
+.doc-body h2{margin-top:44px;font-size:22px;letter-spacing:-.02em}
+.doc-body p,.doc-body li{margin-top:12px;color:var(--ink-2)}
+.doc-body ul{display:grid;gap:4px;margin-top:8px}
+.doc-body li{position:relative;padding-left:20px}
+.doc-body li::before{content:"";position:absolute;left:0;top:12px;width:8px;height:1.5px;background:var(--blue)}
+.doc-body b{color:var(--ink);font-weight:600}
+.doc-body a{color:var(--ink);text-decoration-color:var(--blue);text-underline-offset:3px}
