@@ -12,6 +12,10 @@ const THUMB = (document.getElementById('thumb') || {}).src || '';
 const UNITS = allUnits();
 const FLAT_NOS = Object.keys(FLATS).filter(k => k[0] === 'A').map(k => k.slice(1)).sort(); // '01'…'08'
 const SESSION_KEY = 'arch3:console:session', MODE_KEY = 'arch3:console:view';
+const THEME_KEY = 'arch3:console:theme';
+// light / dark: the person's choice is remembered on this device; until they choose, the device setting decides
+try { const t = localStorage.getItem(THEME_KEY); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) { /* storage blocked */ }
+const isDark = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
 const V = typeof __BUILD__ !== 'undefined' ? __BUILD__ : 'dev'; // build stamp, keeps website links fresh after an update
 const svg = (d, extra = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${d}</svg>`;
 const I = {
@@ -24,6 +28,8 @@ const I = {
   search: svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
   x: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   menu: svg('<path d="M4 7h16M4 12h16M4 17h16"/>'),
+  sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+  moon: svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
   chev: svg('<path d="M6 9l6 6 6-6"/>'),
   check: svg('<path d="M5 12l5 5 9-10"/>'),
   dots: svg('<circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/>'),
@@ -106,10 +112,14 @@ function wingRows() {
 function typeCounts(bhk, status) { return UNITS.filter(u => String(FLATS[u.key].bhk) === bhk && (!status || getUnit(u.id).status === status)).length; }
 
 /* ---------- shell ---------- */
+function themeBtn(cls) {
+  const d = isDark(), label = d ? 'Switch to light theme' : 'Switch to dark theme';
+  return `<button class="${cls}" data-act="theme" aria-label="${label}" title="${label}">${d ? I.sun : I.moon}</button>`;
+}
 function shell(content, ins = true) {
   const n = S.user.name, logN = recentLog(60).length;
   const on = v => S.view === v ? 'on' : '';
-  return `<header class="mtop"><button class="burger" data-act="drawer" aria-label="Open menu">${I.menu}</button><span class="logo">${I.logo}Arch3</span><span class="av" aria-hidden="true">${esc(initials(n))}</span></header>
+  return `<header class="mtop"><button class="burger" data-act="drawer" aria-label="Open menu">${I.menu}</button><span class="logo">${I.logo}Arch3</span>${themeBtn('burger tbtn')}<span class="av" aria-hidden="true">${esc(initials(n))}</span></header>
   <div class="shell ${ins ? '' : 'no-ins'}">
     <aside class="rail ${S.drawer ? 'open' : ''}" aria-label="Main navigation">
       <div class="rail-top"><span class="logo">${I.logo}Arch3</span><button class="rail-close" data-act="drawer-close" aria-label="Close menu">${I.x}</button></div>
@@ -122,7 +132,7 @@ function shell(content, ins = true) {
       </nav>
       <div class="nav-sep"></div>
       <nav class="nav" aria-label="Links"><a href="index.html?v=${V}#explore" target="_blank" rel="noopener">${I.ext}Open 3D website</a></nav>
-      <div class="rail-user"><span class="av" aria-hidden="true">${esc(initials(n))}</span><div><b>${esc(n)}</b><small>${isDemo() ? 'Demo account' : 'Sales manager · live'}</small></div><button class="out" data-act="logout" aria-label="Sign out" title="Sign out">${I.out}</button></div>
+      <div class="rail-user"><span class="av" aria-hidden="true">${esc(initials(n))}</span><div><b>${esc(n)}</b><small>${isDemo() ? 'Demo account' : 'Sales manager · live'}</small></div>${themeBtn('out')}<button class="out" data-act="logout" aria-label="Sign out" title="Sign out">${I.out}</button></div>
     </aside>
     ${S.drawer ? '<div class="scrim" data-act="drawer-close"></div>' : ''}
     <main class="main" id="main">${isDemo() ? `<div class="demo-bar"><b>Demo mode</b> · changes stay on this device. <button class="lnk" data-act="logout">Sign in</button> to update the live website.</div>` : ''}${content}</main>
@@ -300,7 +310,7 @@ function loginPage() {
     <section class="login-side"><span class="logo">${I.logo}Arch3</span>
       <div class="big"><h2>Keep every flat's status in step with your 3D website.</h2><p style="margin-top:12px">Mark a flat booked here and buyers see it on the project's 3D model straight away.</p></div>
       <p class="small" style="font-size:.8rem">Concept demo for ${esc(PROJECT.name)}</p></section>
-    <main class="login-main"><div class="login-form">
+    <main class="login-main">${themeBtn('theme-fab')}<div class="login-form">
       <div><h1>Sign in</h1><p class="sub" style="margin-top:4px">Sales console for your projects.</p></div>
       <form data-login novalidate>
         <label class="field" for="email">Work email<input id="email" name="email" type="email" autocomplete="username" placeholder="you@yourcompany.com"></label>
@@ -375,6 +385,7 @@ app.addEventListener('click', e => {
     render(); return;
   }
   switch (d.act) {
+    case 'theme': { const t = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = t; try { localStorage.setItem(THEME_KEY, t); } catch (er) { /* storage blocked */ } render(); break; }
     case 'drawer': S.drawer = true; render(); break;
     case 'drawer-close': S.drawer = false; render(); break;
     case 'logout':
