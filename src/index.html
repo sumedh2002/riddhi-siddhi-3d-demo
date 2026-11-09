@@ -336,7 +336,8 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
 .v-photo-rooms button{flex:none;border:0;background:transparent;padding:7px 11px;border-radius:7px;font:500 12.5px/1 var(--w-f);color:var(--w-ink-2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
 .v-photo-rooms button:hover{background:var(--w-bg-2);color:var(--w-ink)}
 .v-photo-rooms button.on{background:var(--w-accent);color:var(--w-accent-fg)}
-#viewer.v-prem .v-tools,#viewer.v-prem .v-labels,#viewer.v-prem .v-hint{display:none}
+#viewer.v-prem .v-labels,#viewer.v-prem .v-hint,#viewer.v-prem .v-compass,#viewer.v-prem .w-tb [data-act="reset"],#viewer.v-prem .w-tb [data-act="labels"],#viewer.v-prem .w-tb .sep{display:none}
+#viewer.v-prem .v-tools{z-index:4;bottom:60px}
 .w-seg.tiers button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px}
 .w-seg.tiers b{font-weight:600}
 .w-seg.tiers span{font-size:11.5px;color:var(--w-ink-3)}
@@ -375,6 +376,7 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
   .w-foot{position:static}
   .v-topbar{left:10px;top:10px;max-width:calc(100% - 20px)}
   .v-tools{left:10px;bottom:auto;top:calc(var(--ch) - 50px)}
+  #viewer.v-prem .v-tools{bottom:auto;top:calc(var(--ch) - 96px)}
   .v-hint{left:50%;bottom:auto;top:calc(var(--ch) - 92px)}
   .v-plan{left:auto;right:10px;top:calc(var(--ch) - 94px)}
   .v-plan button{padding:7px 10px;font-size:12px}
