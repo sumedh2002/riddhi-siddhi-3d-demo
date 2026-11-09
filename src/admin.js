@@ -4,7 +4,7 @@
    so the 3D website shows it straight away.
    ========================================================= */
 import { PROJECT, FLATS, NF, allUnits } from './project-data.js';
-import { STATUSES, STATUS_LABEL, getUnit, counts, updateUnit, updateUnits, recentLog, lastUpdated, subscribe, resetDemo } from './inventory.js';
+import { STATUSES, STATUS_LABEL, getUnit, counts, updateUnit, updateUnits, recentLog, lastUpdated, subscribe, resetDemo, auth, isDemo, useDemoMode, useLiveMode } from './inventory.js';
 
 const app = document.getElementById('app');
 const toastEl = document.getElementById('toast');
@@ -43,7 +43,9 @@ const SICON = {
 };
 
 let saved = null; try { saved = localStorage.getItem(MODE_KEY); } catch (e) { /* ignore */ }
-const S = { user: loadSession(), view: 'login', wing: 'A', status: null, type: null, q: '', mode: saved === 'chart' ? 'chart' : 'list', sel: null, draft: null, tab: 'update', checked: new Set(), prevChecked: 0, popEnter: false, menu: null, drawer: false, confirmReset: false };
+const demoSaved = loadSession();
+if (demoSaved && demoSaved.demo) useDemoMode();
+const S = { user: demoSaved && demoSaved.demo ? demoSaved : null, booting: auth.enabled && !(demoSaved && demoSaved.demo), loginErr: '', signingIn: false, view: 'login', wing: 'A', status: null, type: null, q: '', mode: saved === 'chart' ? 'chart' : 'list', sel: null, draft: null, tab: 'update', checked: new Set(), prevChecked: 0, popEnter: false, menu: null, drawer: false, confirmReset: false };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const narrow = () => matchMedia('(max-width: 900px)').matches;
 const parseId = id => { const m = /^([AB])-([1-7])(0[1-8])$/.exec(id || ''); return m ? { wing: m[1], floor: +m[2], n: m[3], key: m[1] + m[3] } : null; };
@@ -58,7 +60,7 @@ function rel(t) {
   return new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short' });
 }
 
-/* ---------- session (demo: any email works; Supabase login replaces this) ---------- */
+/* ---------- session: live accounts are Supabase Auth (see inventory.js); the demo account is stored on this device ---------- */
 function loadSession() { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) { return null; } }
 function saveSession(u) { try { if (u) localStorage.setItem(SESSION_KEY, JSON.stringify(u)); else localStorage.removeItem(SESSION_KEY); } catch (e) { /* storage blocked: session lasts for this page only */ } S.user = u; }
 function nameFrom(email) {
@@ -71,6 +73,7 @@ const initials = n => n.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpper
 function route() {
   const [view, wing, id] = location.hash.replace(/^#\/?/, '').split('/');
   S.confirmReset = false; S.menu = null; S.drawer = false;
+  if (S.booting) { S.view = 'boot'; render(); return; }
   if (!S.user) { S.view = 'login'; render(); return; }
   if (view === 'overview' || view === 'activity') { S.view = view; S.sel = null; S.draft = null; }
   else {
@@ -118,17 +121,17 @@ function shell(content, ins = true) {
       </nav>
       <div class="nav-sep"></div>
       <nav class="nav" aria-label="Links"><a href="index.html#explore" target="_blank" rel="noopener">${I.ext}Open 3D website</a></nav>
-      <div class="rail-user"><span class="av" aria-hidden="true">${esc(initials(n))}</span><div><b>${esc(n)}</b><small>Sales manager</small></div><button class="out" data-act="logout" aria-label="Sign out" title="Sign out">${I.out}</button></div>
+      <div class="rail-user"><span class="av" aria-hidden="true">${esc(initials(n))}</span><div><b>${esc(n)}</b><small>${isDemo() ? 'Demo account' : 'Sales manager · live'}</small></div><button class="out" data-act="logout" aria-label="Sign out" title="Sign out">${I.out}</button></div>
     </aside>
     ${S.drawer ? '<div class="scrim" data-act="drawer-close"></div>' : ''}
-    <main class="main" id="main">${content}</main>
+    <main class="main" id="main">${isDemo() ? `<div class="demo-bar"><b>Demo mode</b> · changes stay on this device. <button class="lnk" data-act="logout">Sign in</button> to update the live website.</div>` : ''}${content}</main>
     ${ins ? insights() : ''}
   </div>`;
 }
 function footer() {
-  return `<footer class="foot"><p>Demo mode. Changes are saved in this browser and show up on the 3D website open in another tab.</p>
+  return `<footer class="foot"><p>${isDemo() ? 'Demo mode. Changes are saved on this device and show up on the 3D website open in another tab here.' : 'Live. Every change shows on the 3D website for all visitors within seconds.'}</p>
     <div class="reset">${S.confirmReset
-      ? `<span>Reset all ${UNITS.length} flats to the starting data?</span><button class="btn sm danger" data-act="reset-yes">Reset</button><button class="btn sm" data-act="reset-no">Cancel</button>`
+      ? `<span>Reset all ${UNITS.length} flats to the starting data${isDemo() ? '' : ' for everyone'}?</span><button class="btn sm danger" data-act="reset-yes">Reset</button><button class="btn sm" data-act="reset-no">Cancel</button>`
       : `<button class="lnk" data-act="reset">Reset demo data</button>`}</div></footer>`;
 }
 
@@ -301,18 +304,20 @@ function loginPage() {
       <form data-login novalidate>
         <label class="field" for="email">Work email<input id="email" name="email" type="email" autocomplete="username" placeholder="you@yourcompany.com"></label>
         <label class="field" for="password">Password<input id="password" name="password" type="password" autocomplete="current-password"></label>
-        <button class="btn dark tall block" type="submit">Sign in</button>
+        ${S.loginErr ? `<p class="login-err" role="alert">${esc(S.loginErr)}</p>` : ''}
+        <button class="btn dark tall block" type="submit" ${S.signingIn ? 'disabled' : ''}>${S.signingIn ? 'Signing in…' : 'Sign in'}</button>
       </form>
       <p class="or">or</p>
       <button class="btn tall block" data-act="demo-login">Continue with the demo account</button>
-      <p class="faint" style="font-size:.8rem">Demo mode: any email and password will work.</p>
+      <p class="faint" style="font-size:.8rem">${auth.enabled ? 'Explore without an account. Demo changes stay on this device.' : 'Demo mode: any email and password will work.'}</p>
     </div></main></div>`;
 }
 
 /* ---------- render ---------- */
 function render() {
   const y = window.scrollY, popEl = app.querySelector('.pop'), popY = popEl ? popEl.scrollTop : 0;
-  if (S.view === 'login') app.innerHTML = loginPage();
+  if (S.view === 'boot') app.innerHTML = '<div class="boot" aria-busy="true"><span></span></div>';
+  else if (S.view === 'login') app.innerHTML = loginPage();
   else if (S.view === 'overview') app.innerHTML = shell(overviewPage());
   else if (S.view === 'activity') app.innerHTML = shell(activityPage());
   else app.innerHTML = shell(inventoryPage());
@@ -364,15 +369,19 @@ app.addEventListener('click', e => {
   if (d.bulk) {
     const ids = [...S.checked], n = updateUnits(ids, d.bulk, S.user.name);
     S.checked.clear();
-    toast(`${I.check}${n ? `${n} flat${n > 1 ? 's' : ''} marked ${STATUS_LABEL[d.bulk]}. The website is updated.` : `Those flats were already ${STATUS_LABEL[d.bulk]}.`}`);
+    toast(`${I.check}${n ? `${n} flat${n > 1 ? 's' : ''} marked ${STATUS_LABEL[d.bulk]}. ${isDemo() ? 'Saved on this device (demo).' : 'The website is updated.'}` : `Those flats were already ${STATUS_LABEL[d.bulk]}.`}`);
     if (S.sel) S.draft = { status: getUnit(S.sel).status, remarks: getUnit(S.sel).remarks || '' };
     render(); return;
   }
   switch (d.act) {
     case 'drawer': S.drawer = true; render(); break;
     case 'drawer-close': S.drawer = false; render(); break;
-    case 'logout': saveSession(null); S.checked.clear(); go('overview'); break;
-    case 'demo-login': saveSession({ email: 'sales.manager@demo', name: 'Rahul Patil' }); go('inventory/A'); break;
+    case 'logout':
+      S.checked.clear();
+      if (S.user && S.user.demo) { saveSession(null); useLiveMode(); go('overview'); }
+      else auth.signOut().finally(() => { S.user = null; go('overview'); });
+      break;
+    case 'demo-login': useDemoMode(); saveSession({ email: 'sales.manager@demo', name: 'Rahul Patil', demo: true }); S.loginErr = ''; go('inventory/A'); break;
     case 'export': exportCsv(); break;
     case 'clear': S.status = null; S.type = null; S.q = ''; render(); break;
     case 'check-all': { const ids = wingRows().map(r => r.id), all = ids.every(id => S.checked.has(id)); ids.forEach(id => all ? S.checked.delete(id) : S.checked.add(id)); render(); break; }
@@ -383,7 +392,7 @@ app.addEventListener('click', e => {
       const id = S.sel, remarks = S.draft.remarks.trim();
       updateUnit(id, { status: S.draft.status, remarks }, S.user.name);
       S.draft.remarks = remarks;
-      toast(`${I.check}${id} saved as ${STATUS_LABEL[S.draft.status]}. The website is updated.`);
+      toast(`${I.check}${id} saved as ${STATUS_LABEL[S.draft.status]}. ${isDemo() ? 'Saved on this device (demo).' : 'The website is updated.'}`);
       render(); break;
     }
     case 'reset': S.confirmReset = true; render(); break;
@@ -402,8 +411,13 @@ app.addEventListener('input', e => {
 app.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.matches('[data-login]')) {
-    const email = e.target.email.value.trim() || 'sales.manager@demo';
-    saveSession({ email, name: nameFrom(email) }); go('inventory/A'); return;
+    const email = e.target.email.value.trim(), password = e.target.password.value;
+    if (!auth.enabled) { saveSession({ email: email || 'sales.manager@demo', name: nameFrom(email || 'sales.manager'), demo: true }); go('inventory/A'); return; }
+    if (!email || !password) { S.loginErr = 'Enter your work email and password.'; render(); return; }
+    S.signingIn = true; S.loginErr = ''; render();
+    auth.signIn(email, password).then(u => { S.user = u; S.signingIn = false; saveSession(null); go('inventory/A'); },
+      err => { S.signingIn = false; S.loginErr = err.message; render(); const pw = document.getElementById('password'); if (pw) pw.focus(); });
+    return;
   }
   if (e.target.matches('[data-goto]')) {
     const q = e.target.q.value.trim().toUpperCase().replace(/\s+/g, '').replace(/^([AB])(\d)/, '$1-$2');
@@ -424,6 +438,7 @@ matchMedia('(max-width: 900px)').addEventListener('change', () => S.user && rend
 
 /* changes made in another tab */
 subscribe(e => {
+  if (e.type === 'error') { toast(esc(e.message)); if (S.view !== 'login' && S.view !== 'boot') render(); return; }
   if (!e.remote) return;
   if (S.sel && S.draft && (e.type === 'reset' || e.id === S.sel)) { const u = getUnit(S.sel); S.draft = { status: u.status, remarks: u.remarks || '' }; }
   const a = document.activeElement; if (a && (a.id === 'rm' || a.id === 'fq' || a.id === 'rs')) return; // don't interrupt typing
@@ -435,3 +450,5 @@ let tt = null;
 function toast(html) { toastEl.innerHTML = html; toastEl.hidden = false; clearTimeout(tt); tt = setTimeout(() => { toastEl.hidden = true; }, 3400); }
 
 route();
+// live accounts: restore the Supabase session (if any) before showing the console
+if (S.booting) auth.current().then(u => { S.booting = false; if (u) S.user = u; route(); }, () => { S.booting = false; route(); });
