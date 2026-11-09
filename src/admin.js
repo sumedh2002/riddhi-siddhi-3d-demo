@@ -11,7 +11,7 @@ const toastEl = document.getElementById('toast');
 const THUMB = (document.getElementById('thumb') || {}).src || '';
 const UNITS = allUnits();
 const FLAT_NOS = Object.keys(FLATS).filter(k => k[0] === 'A').map(k => k.slice(1)).sort(); // '01'…'08'
-const SESSION_KEY = 'storey3d:console:session', MODE_KEY = 'storey3d:console:view';
+const SESSION_KEY = 'arch3:console:session', MODE_KEY = 'arch3:console:view';
 const svg = (d, extra = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${d}</svg>`;
 const I = {
   logo: svg('<path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/><path d="M4 20h16"/>'),

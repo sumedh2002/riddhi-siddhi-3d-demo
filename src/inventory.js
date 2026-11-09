@@ -11,11 +11,11 @@ import { PROJECT, allUnits } from './project-data.js';
 export const STATUSES = ['available', 'hold', 'booked', 'sold'];
 export const STATUS_LABEL = { available: 'Available', hold: 'On hold', booked: 'Booked', sold: 'Sold' };
 
-const KEY = `storey3d:${PROJECT.id}:inventory:v1`;
+const KEY = `arch3:${PROJECT.id}:inventory:v1`;
 const UNITS = allUnits();
 const subs = new Set();
 let chan = null;
-try { chan = new BroadcastChannel(`storey3d:${PROJECT.id}`); } catch (e) { /* older browsers: storage events still work */ }
+try { chan = new BroadcastChannel(`arch3:${PROJECT.id}`); } catch (e) { /* older browsers: storage events still work */ }
 
 /* starting data for the demo, so the building isn't all one colour */
 function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
