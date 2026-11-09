@@ -6,10 +6,12 @@
 const esbuild = require('esbuild'), fs = require('fs'), path = require('path');
 const SRC = __dirname;
 const OUT = path.resolve(process.argv[2] || path.join(SRC, '..'));
+// Build stamp: added to links between the pages so browsers never reuse an out-of-date copy
+const BUILD = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
 if (OUT === SRC) throw new Error('Output folder must not be the src folder (it would overwrite the templates).');
 
 async function page(entry, template) {
-  const r = await esbuild.build({ entryPoints: [path.join(SRC, entry)], bundle: true, format: 'iife', minify: true, write: false, target: ['es2020'], legalComments: 'none' });
+  const r = await esbuild.build({ entryPoints: [path.join(SRC, entry)], bundle: true, format: 'iife', minify: true, write: false, target: ['es2020'], legalComments: 'none', define: { __BUILD__: JSON.stringify(BUILD) } });
   const js = r.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
   let html = fs.readFileSync(path.join(SRC, template), 'utf8');
   html = html.replace(/\{\{img:([a-z0-9_]+)\}\}/g, (m, n) => 'data:image/jpeg;base64,' + fs.readFileSync(path.join(SRC, 'img', n + '.jpg')).toString('base64'));
@@ -22,5 +24,5 @@ async function page(entry, template) {
   fs.mkdirSync(OUT, { recursive: true });
   await page('app.js', 'index.html');
   await page('admin.js', 'admin.html');
-  console.log('->', OUT);
+  console.log('->', OUT, 'build', BUILD);
 })().catch(e => { console.error(e); process.exit(1); });
