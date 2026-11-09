@@ -321,13 +321,21 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
 .pano-spot i{position:absolute;inset:0;border-radius:50%;border:3px solid rgba(255,255,255,.95);background:rgba(255,255,255,.16);box-shadow:0 2px 14px rgba(0,0,0,.28),inset 0 0 0 9px rgba(255,255,255,.12);transform:scaleY(.42);transition:background .15s,transform .15s}
 .pano-spot span{position:absolute;left:50%;bottom:calc(50% + 16px);transform:translateX(-50%);padding:6px 10px;border-radius:999px;background:rgba(13,17,23,.62);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff;font:500 12.5px/1 var(--w-f);white-space:nowrap}
 .pano-spot:hover i,.pano-spot:focus-visible i{background:rgba(255,255,255,.42);transform:scaleY(.42) scale(1.08)}
+.v-mini{position:absolute;z-index:2;right:20px;bottom:12px;display:flex;flex-direction:column;gap:6px;padding:8px 8px 7px;background:var(--w-glass);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);border:1px solid var(--w-line);border-radius:10px;box-shadow:var(--w-shadow-s)}
+.v-mini svg{display:block;width:124px;height:auto;overflow:visible}
+.v-mini rect{fill:var(--w-bg);stroke:var(--w-ink-3);stroke-width:.06}
+.v-mini rect.cur{fill:var(--w-sel-t)}
+.v-mini .cone path{fill:var(--w-sel);opacity:.3}
+.v-mini .pt{fill:var(--w-ink-3);stroke:var(--w-bg);stroke-width:.06;cursor:pointer}
+.v-mini .pt:hover{fill:var(--w-ink)}
+.v-mini .me{fill:var(--w-sel);stroke:#fff;stroke-width:.09}
+.v-mini span{font:500 10.5px/1.2 var(--w-f);color:var(--w-ink-3);text-align:center;white-space:nowrap}
 .v-photo-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:9px 14px;border-radius:999px;background:var(--w-scrim);color:#fff;font:500 12.5px/1 var(--w-f);pointer-events:none;transition:opacity .5s}
 .v-photo.used .v-photo-hint{opacity:0}
 .v-photo-rooms{position:absolute;z-index:2;left:12px;bottom:12px;display:flex;gap:2px;max-width:calc(100% - 210px);overflow-x:auto;padding:3px;background:var(--w-glass);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);border:1px solid var(--w-line);border-radius:10px;box-shadow:var(--w-shadow-s);scrollbar-width:none;cursor:default}
 .v-photo-rooms button{flex:none;border:0;background:transparent;padding:7px 11px;border-radius:7px;font:500 12.5px/1 var(--w-f);color:var(--w-ink-2);cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
 .v-photo-rooms button:hover{background:var(--w-bg-2);color:var(--w-ink)}
 .v-photo-rooms button.on{background:var(--w-accent);color:var(--w-accent-fg)}
-.v-photo-tag{position:absolute;z-index:2;right:20px;bottom:14px;padding:6px 9px;border-radius:7px;background:var(--w-scrim);color:#fff;font:500 11px/1 var(--w-f);pointer-events:none}
 #viewer.v-prem .v-tools,#viewer.v-prem .v-labels,#viewer.v-prem .v-hint{display:none}
 .w-seg.tiers button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px}
 .w-seg.tiers b{font-weight:600}
@@ -362,7 +370,7 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
   .v-plan button span{display:none}
   .v-photo{right:0;bottom:auto;height:var(--ch)}
   .v-photo-rooms{left:10px;bottom:10px;max-width:calc(100% - 20px)}
-  .v-photo-tag{right:10px;bottom:auto;top:52px}
+  .v-mini{right:10px;bottom:auto;top:52px;padding:6px}.v-mini svg{width:84px}.v-mini span{display:none}
   .v-toast{left:50%;top:calc(var(--ch) - 146px);width:max-content;max-width:calc(100% - 24px);white-space:normal}
   .v-labels.furn .rlabel{padding:2px 7px}.v-labels.furn .rlabel b{font-size:10.5px}
   #viewer.v-full .v-canvas{flex:none;height:var(--ch)}
@@ -482,7 +490,7 @@ footer b{color:#fff;font-family:var(--f-d);letter-spacing:.06em}
     <div id="viewer" aria-label="Interactive 3D model of Riddhi Siddhi Apartment">
       <div class="v-canvas"></div>
       <div class="v-labels"></div>
-      <div class="v-photo" hidden><div class="v-photo-rooms" role="group" aria-label="Rooms"></div><span class="v-photo-tag">AI visualisation · indicative</span><span class="v-photo-hint" aria-hidden="true">Drag to look around</span></div>
+      <div class="v-photo" hidden><div class="v-photo-rooms" role="group" aria-label="Rooms"></div><span class="v-photo-hint" aria-hidden="true">Drag to look around</span></div>
       <div class="v-topbar"><nav class="v-crumbs" aria-label="Where you are"></nav></div>
       <aside class="v-panel" aria-label="Flat selection"><div class="v-body"></div></aside>
       <div class="v-tools">

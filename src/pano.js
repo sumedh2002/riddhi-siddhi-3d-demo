@@ -16,10 +16,10 @@ export function createPano(el, hooks = {}) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   const cv = renderer.domElement; cv.className = 'pano-cv'; el.prepend(cv);
   const marks = document.createElement('div'); marks.className = 'pano-marks'; el.appendChild(marks);
-  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(78, 1, 0.01, 10);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(65, 1, 0.01, 10);
   camera.rotation.order = 'YXZ';
   const loader = new THREE.TextureLoader(), cache = new Map(), maxAniso = renderer.capabilities.getMaxAnisotropy();
-  let yaw = 0, pitch = -4 * DEG, fov = 78, cube = null, fading = null, spots = [], dirty = true, raf = 0, vel = 0, alive = true;
+  let yaw = 0, pitch = -4 * DEG, zk = 1, cube = null, fading = null, spots = [], dirty = true, raf = 0, vel = 0, alive = true;
 
   function tex(url) {
     if (!cache.has(url)) cache.set(url, loader.loadAsync(url).then(t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; return t; }));
@@ -52,7 +52,7 @@ export function createPano(el, hooks = {}) {
     if (cube && opts.fade !== false) {
       if (fading) { disposeCube(fading.from); }
       g.renderOrder = 1; setOpacity(g, 0);
-      fading = { from: cube, to: g, t0: performance.now(), f0: fov };
+      fading = { from: cube, to: g, t0: performance.now() };
     } else if (cube) disposeCube(cube);
     cube = g;
     setSpots(spotList);
@@ -76,22 +76,25 @@ export function createPano(el, hooks = {}) {
   cv.addEventListener('pointerdown', e => {
     ptrs.set(e.pointerId, [e.clientX, e.clientY]); try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
     if (ptrs.size === 1) { last = [e.clientX, e.clientY, performance.now()]; vel = 0; el.classList.add('drag'); hooks.onInteract && hooks.onInteract(); }
-    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), f: fov }; }
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: zk }; }
   });
   cv.addEventListener('pointermove', e => {
     if (!ptrs.has(e.pointerId)) return;
     ptrs.set(e.pointerId, [e.clientX, e.clientY]);
-    if (ptrs.size === 2 && pinch0) { const [a, b] = [...ptrs.values()]; fov = clampFov(pinch0.f * pinch0.d / Math.max(20, Math.hypot(a[0] - b[0], a[1] - b[1]))); kick(); return; }
+    if (ptrs.size === 2 && pinch0) { const [a, b] = [...ptrs.values()]; zk = clampZ(pinch0.z * pinch0.d / Math.max(20, Math.hypot(a[0] - b[0], a[1] - b[1]))); kick(); return; }
     if (!last) return;
-    const k = (fov * DEG) / cv.clientHeight, dx = e.clientX - last[0], dy = e.clientY - last[1], now = performance.now();
+    const k = (curFov() * DEG) / cv.clientHeight, dx = e.clientX - last[0], dy = e.clientY - last[1], now = performance.now();
     yaw += dx * k; pitch = clampPitch(pitch + dy * k);
     vel = dx * k / Math.max(8, now - last[2]) * 16; last = [e.clientX, e.clientY, now]; kick();
   });
   const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) { last = null; el.classList.remove('drag'); kick(); } };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-  cv.addEventListener('wheel', e => { e.preventDefault(); fov = clampFov(fov * Math.exp(e.deltaY * 0.0012)); kick(); }, { passive: false });
+  cv.addEventListener('wheel', e => { e.preventDefault(); zk = clampZ(zk * Math.exp(e.deltaY * 0.0012)); kick(); }, { passive: false });
   const clampPitch = p => Math.max(-85 * DEG, Math.min(85 * DEG, p));
-  const clampFov = f => Math.max(38, Math.min(96, f));
+  const clampZ = z => Math.max(0.5, Math.min(1.12, z));
+  // natural, eye-like view: about 72° across (narrower on tall phone screens), never wider than 80° even zoomed out — no fisheye
+  const baseFov = () => Math.min(72, Math.max(50, 2 * Math.atan(Math.tan(36 * DEG) / (camera.aspect || 1.5)) / DEG));
+  const curFov = () => Math.max(30, Math.min(80, baseFov() * zk));
 
   /* ---------- loop ---------- */
   const fwd = new THREE.Vector3(), v3 = new THREE.Vector3();
@@ -101,9 +104,9 @@ export function createPano(el, hooks = {}) {
     if (!last && Math.abs(vel) > 0.00005) { yaw += vel; vel *= 0.92; more = true; }
     if (fading) {
       const k = Math.min(1, (t - fading.t0) / 650), e = k * k * (3 - 2 * k);
-      setOpacity(fading.to, e); camera.fov = fading.f0 * (1 - 0.06 * Math.sin(e * Math.PI)); // a small step forward as the rooms swap
+      setOpacity(fading.to, e); camera.fov = curFov() * (1 - 0.06 * Math.sin(e * Math.PI)); // a small step forward as the rooms swap
       if (k >= 1) { disposeCube(fading.from); fading.to.renderOrder = 0; fading = null; } else more = true;
-    } else camera.fov = fov;
+    } else camera.fov = curFov();
     camera.rotation.set(pitch, yaw, 0); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
     renderer.render(scene, camera);
     // floor markers
@@ -126,7 +129,7 @@ export function createPano(el, hooks = {}) {
   return {
     show, preload, resize,
     get yaw() { return yaw; },
-    zoom(f) { fov = clampFov(fov * f); kick(); },
+    zoom(f) { zk = clampZ(zk * f); kick(); },
     dispose() { alive = false; ro.disconnect(); if (cube) disposeCube(cube); renderer.dispose(); cv.remove(); marks.remove(); }
   };
 }

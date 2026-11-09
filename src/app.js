@@ -37,9 +37,10 @@ const yawTo = (a, b) => Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])); // plan x �
 let pano = null, panoKey = '';
 function showPhoto() {
   const P = premData(); if (!P) return;
-  if (!pano) pano = createPano(photoEl, { onSpot: walkTo, onInteract: () => photoEl.classList.add('used'), onError: () => toast('<b>Could not load the 360° view</b><span>Check the connection and try again</span>') });
+  if (!pano) pano = createPano(photoEl, { onSpot: walkTo, onFrame: turnMini, onInteract: () => photoEl.classList.add('used'), onError: () => toast('<b>Could not load the 360° view</b><span>Check the connection and try again</span>') });
   const view = premView(P), set = premiumSet(view, prem.tod, prem.fin);
   prem.view = view.id;
+  buildMini(P, v.state.flat, view);
   roomsBar.innerHTML = P.views.map(x => `<button data-view="${x.id}"${x.id === view.id ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"'}>${esc(x.name)}</button>`).join('');
   const key = P.dir + set.prefix;
   if (key === panoKey && prem.nextYaw === undefined) return;
@@ -49,6 +50,21 @@ function showPhoto() {
   prem.nextYaw = undefined;
   for (const l of view.links) { const t = P.views.find(x => x.id === l.to); pano.preload(faceUrls(P, premiumSet(t, prem.tod, prem.fin).prefix)); }
 }
+/* mini floor plan on the 360 view: where you stand and which way you face */
+const mini = document.createElement('div'); mini.className = 'v-mini'; photoEl.appendChild(mini);
+let miniCone = null, miniAt = null;
+function buildMini(P, k, view) {
+  const R = FLATS[k].rooms, xs = R.flatMap(r => [r[2], r[4]]), ys = R.flatMap(r => [r[3], r[5]]);
+  const x0 = Math.min(...xs) - 0.35, y0 = Math.min(...ys) - 0.35, w = Math.max(...xs) + 0.35 - x0, h = Math.max(...ys) + 0.35 - y0, n = x => x.toFixed(2);
+  mini.innerHTML = `<svg viewBox="${n(x0)} ${n(y0)} ${n(w)} ${n(h)}" role="img" aria-label="Floor plan: you are in the ${esc(view.name.toLowerCase())}">`
+    + R.map((r, i) => `<rect x="${n(r[2])}" y="${n(r[3])}" width="${n(r[4] - r[2])}" height="${n(r[5] - r[3])}"${i === view.room ? ' class="cur"' : ''}/>`).join('')
+    + `<g class="cone"><path d="M0 0 L-1.15 -1.65 A2 2 0 0 1 1.15 -1.65 Z"/></g>`
+    + P.views.filter(x => x.id !== view.id).map(x => `<circle class="pt" data-view="${x.id}" cx="${n(x.p[0])}" cy="${n(x.p[1])}" r="0.24"><title>${esc(x.name)}</title></circle>`).join('')
+    + `<circle class="me" cx="${n(view.p[0])}" cy="${n(view.p[1])}" r="0.28"/></svg><span>AI visualisation · indicative</span>`;
+  miniCone = mini.querySelector('.cone'); miniAt = view.p;
+  if (pano) turnMini(pano.yaw);
+}
+function turnMini(yaw) { if (miniCone) miniCone.setAttribute('transform', `translate(${miniAt[0]} ${miniAt[1]}) rotate(${(-yaw * 180 / Math.PI).toFixed(1)})`); }
 function walkTo(id, faceLook) {
   const P = premData(); if (!P) return;
   const from = premView(P), to = P.views.find(x => x.id === id); if (!to || to === from) return;
@@ -235,7 +251,7 @@ function onInteract() { hint.classList.add('gone'); root.classList.add('v-drag')
 
 /* ---------- panel events ---------- */
 root.addEventListener('click', e => {
-  const t = e.target.closest('button,[data-flat],[data-room]'); if (!t) return;
+  const t = e.target.closest('button,[data-flat],[data-room],[data-view]'); if (!t) return;
   const S = v.state, d = t.dataset;
   if (d.go === 'home') v.home();
   else if (d.go === 'wing') v.selectWing(S.wing);
