@@ -173,11 +173,10 @@ function render(keepScroll) {
     let rows = '';
     for (let fl = NF; fl >= 1; fl--) {
       const ids = ks.map(x => unitId(w, fl, FLATS[x].n)), a = ids.filter(id => statusOf(id) === 'available').length;
-      // every flat is its own button: its number, tinted by status; the floor number opens the floor
-      rows += `<div class="w-mx-r"><button class="fl" data-floor="${fl}" aria-label="Floor ${fl}, ${a} available">${String(fl).padStart(2, '0')}</button><span class="w-mx-c">${ids.map(id => `<button class="w-cell c-${statusOf(id)}" data-unit="${id}" aria-label="${id}, ${ST[statusOf(id)]}" title="${id} · ${ST[statusOf(id)]}">${id.split('-')[1]}</button>`).join('')}</span><span class="av${a ? '' : ' zero'}">${a}</span></div>`;
+      rows += `<button class="w-flr" data-floor="${fl}"><b>Floor ${fl}</b><span class="av${a ? '' : ' zero'}">${a} of ${ids.length} available</span>${ICON.right || '›'}</button>`;
     }
-    h = head(esc(PROJECT.name), `${w} Wing`, `${c.available} of ${c.total} homes available. Each row is a floor. Tap a flat to open it.`)
-      + sec('Stacking plan', `<div class="w-mx"><div class="w-mx-h" aria-hidden="true"><span>Floor</span><span class="w-mx-c">${ks.map(x => `<span>${FLATS[x].n}</span>`).join('')}</span><span>Avail.</span></div>${rows}</div>${legend}`)
+    h = head(esc(PROJECT.name), `${w} Wing`, `${c.available} of ${c.total} homes available. Choose a floor.`)
+      + sec('Floors', `<div class="w-flrs">${rows}</div>`)
       + `<div class="w-foot"><button class="w-btn ghost" data-go="home">${ICON.left}All wings</button>${brand}</div>`;
   } else if (S.mode === 'floor' || (S.mode === 'flat' && !k)) {
     const c = counts({ wing: w, floor: f });
@@ -275,8 +274,7 @@ function onInteract() { hint.classList.add('gone'); root.classList.add('v-drag')
 root.addEventListener('click', e => {
   const t = e.target.closest('button,[data-flat],[data-room],[data-view]'); if (!t) return;
   const S = v.state, d = t.dataset;
-  if (d.unit) { goToFlat(d.unit); return; }
-  else if (d.go === 'home') v.home();
+  if (d.go === 'home') v.home();
   else if (d.go === 'wing') v.selectWing(S.wing);
   else if (d.go === 'floor') v.selectFloor(S.floor);
   else if (d.go === 'flat') v.selectFlat(S.flat);

@@ -210,26 +210,13 @@ a{color:inherit}
 .w-totals b{margin-left:auto;font:600 13px var(--w-m);color:var(--w-ink)}
 
 /* wing: stacking plan */
-.w-mx{display:grid;gap:2px;margin:0 -8px}
-.w-mx-h,.w-mx-r{display:grid;grid-template-columns:30px minmax(0,1fr) 34px;align-items:center;gap:12px;padding:0 8px}
-.w-mx-h{padding-bottom:4px;font:500 10.5px/1 var(--w-m);color:var(--w-ink-3)}
-.w-mx-h>span:last-child,.w-mx-r .av{text-align:right}
-.w-mx-c{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
-.w-mx-h .w-mx-c span{text-align:center}
-.w-mx-r{min-height:38px}
-.w-mx-r .fl{height:30px;padding:0;border:0;border-radius:6px;background:transparent;font:600 13px/1 var(--w-m);color:var(--w-ink);text-align:left;cursor:pointer}
-.w-mx-r .fl:hover{background:var(--w-bg-2)}
-/* one button per flat: its number on its status colour */
-.w-cell{height:30px;min-width:0;padding:0;border:0;border-radius:6px;font:600 11px/1 var(--w-m);cursor:pointer;transition:transform .12s,box-shadow .12s}
-.w-cell:hover{transform:translateY(-1px);box-shadow:0 4px 10px -4px rgba(13,17,23,.35)}
-.w-cell:active{transform:none}
-.w-cell:focus-visible,.w-mx-r .fl:focus-visible{outline:2px solid var(--w-sel);outline-offset:2px}
-.c-available{background:var(--w-ok-t);color:var(--w-ok);box-shadow:inset 0 0 0 1px var(--w-ok-f)}
-.c-hold{background:var(--w-hold-t);color:var(--w-hold);box-shadow:inset 0 0 0 1px var(--w-hold-f)}
-.c-booked{background:var(--w-bad-t);color:var(--w-bad);box-shadow:inset 0 0 0 1px var(--w-bad-f)}
-.c-sold{background:var(--w-sold-t);color:var(--w-sold);box-shadow:inset 0 0 0 1px var(--w-sold-f)}
-.w-mx-r .av{font:500 13px/1 var(--w-m);color:var(--w-ink-2)}
-.w-mx-r .av.zero{color:var(--w-ink-3);opacity:.6}
+.w-flrs{display:grid;gap:6px}
+.w-flr{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 14px;border:1px solid var(--w-line);border-radius:var(--w-r-s);background:var(--w-bg);color:var(--w-ink);font:500 14px/1 var(--w-f);text-align:left;cursor:pointer;transition:background .15s,border-color .15s}
+.w-flr:hover{background:var(--w-bg-2);border-color:var(--w-ink-3)}
+.w-flr:focus-visible{outline:2px solid var(--w-sel);outline-offset:2px}
+.w-flr .av{margin-left:auto;font-size:13px;color:var(--w-ok)}
+.w-flr .av.zero{color:var(--w-ink-3)}
+.w-flr svg{flex:none;width:14px;height:14px;color:var(--w-ink-3)}
 
 /* floor: flats + key plan */
 .w-units{display:grid;grid-template-columns:1fr 1fr;gap:8px}
