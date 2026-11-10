@@ -118,7 +118,9 @@ const ICON = {
 };
 const st = s => `<span class="w-st st-${s}"><i></i>${ST[s]}</span>`;
 const badge = s => `<span class="w-st w-badge st-${s}"><i></i>${ST[s]}</span>`;
-const clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+// The time of the last availability change, not the current time: today shows the time, older shows the date.
+const clock = t => { const d = new Date(t), today = d.toDateString() === new Date().toDateString();
+  return 'updated ' + (today ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString([], { day: 'numeric', month: 'short' })); };
 const legend = `<div class="w-legend">${STATUSES.map(s => `<span><i class="w-sq s-${s}"></i>${ST[s]}</span>`).join('')}</div>`;
 const brand = `<span class="w-brand">3D explorer by <b>Arch3</b></span>`;
 const bar = c => `<span class="w-bar" aria-hidden="true">${STATUSES.map(s => c[s] ? `<i class="s-${s}" style="flex:${c[s]}"></i>` : '').join('')}</span>`;
