@@ -3,7 +3,7 @@
    flat availability up to date. Every save goes through inventory.js,
    so the 3D website shows it straight away.
    ========================================================= */
-import { PROJECT, FLATS, NF, allUnits } from './project-data.js';
+import { PROJECT, FLATS, NF, allUnits, flatOn, FLOOR_AMENITY } from './project-data.js';
 import { STATUSES, STATUS_LABEL, getUnit, counts, updateUnit, updateUnits, recentLog, lastUpdated, subscribe, resetDemo, auth, isDemo, useDemoMode, useLiveMode } from './inventory.js';
 
 const app = document.getElementById('app');
@@ -245,6 +245,7 @@ function chartView() {
   for (let fl = NF; fl >= 1; fl--) {
     h += `<tr><th scope="row" class="faint"><span class="fl-l">Floor ${fl}</span><span class="fl-s">F${fl}</span></th>`;
     for (const n of FLAT_NOS) {
+      if (!flatOn(S.wing + n, fl)) { const am = (FLOOR_AMENITY[fl] || {})[S.wing + n]; h += `<td><span class="cell na" title="${am || 'No flat here on this floor'}">${am ? am.split(' ')[0] : '–'}</span></td>`; continue; }
       const id = `${S.wing}-${fl}${n}`, x = getUnit(id);
       h += `<td><button class="cell b-${x.status}${S.sel === id ? ' on' : ''}${show.has(id) ? '' : ' dim'}${S.checked.has(id) ? ' chk' : ''}" data-open="${id}" aria-label="Flat ${id}, ${STATUS_LABEL[x.status]}">${fl}${n}${x.remarks ? '<i class="note"></i>' : ''}</button></td>`;
     }

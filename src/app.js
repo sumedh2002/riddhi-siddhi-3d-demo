@@ -1,6 +1,6 @@
 import { createViewer, DATA, statusOf, unitId } from './viewer.js';
 import { subscribe, lastUpdated, counts, STATUSES, STATUS_LABEL } from './inventory.js';
-import { PROJECT } from './project-data.js';
+import { PROJECT, flatOn, FLOOR_AMENITY } from './project-data.js';
 import { PREMIUM, PREMIUM_SITE, PREMIUM_FINISHES, FACE_KEYS, premiumSet } from './premium.js';
 import { createPano } from './pano.js';
 
@@ -15,6 +15,8 @@ const needle = root.querySelector('.v-compass i');
 const ST = STATUS_LABEL;
 const toastEl = root.querySelector('.v-toast');
 const flatsOfWing = w => Object.keys(FLATS).filter(k => FLATS[k].wing === w).sort();
+const flatsOn = (w, f) => flatsOfWing(w).filter(k => flatOn(k, f)); // the flats that exist on a floor
+const amenityOn = (k, f) => (FLOOR_AMENITY[f] || {})[k];
 const bhk = k => FLATS[k].bhk + ' BHK';
 const shortName = PROJECT.short || PROJECT.name.replace(/\s+Apartments?$/i, '');
 let v = null;
@@ -135,11 +137,12 @@ function keyPlan(w, f) {
   const xs = w === 'A' ? [0.6, 22.2] : [20.9, 42.6], sc = 9.2, H = 25.6 * sc, Wd = (xs[1] - xs[0]) * sc;
   let s = `<svg viewBox="0 0 ${Wd.toFixed(0)} ${H.toFixed(0)}" class="kp" style="aspect-ratio:${Wd.toFixed(0)}/${H.toFixed(0)}" role="img" aria-label="Key plan of ${w} wing, floor ${f}">`;
   for (const k of flatsOfWing(w)) {
-    const F = FLATS[k], s0 = statusOf(unitId(w, f, F.n)), sel = v && v.state.flat === k;
-    s += `<g class="kp-flat ${sel ? 'sel' : ''} kp-${s0}" data-flat="${k}">`;
+    const F = FLATS[k], s0 = statusOf(unitId(w, f, F.n)), sel = v && v.state.flat === k, on = flatOn(k, f), am = amenityOn(k, f);
+    if (!on && !am) continue; // not built on this floor
+    s += on ? `<g class="kp-flat ${sel ? 'sel' : ''} kp-${s0}" data-flat="${k}">` : `<g class="kp-am">`;
     for (const r of F.rooms) s += `<rect x="${((r[2] - xs[0]) * sc).toFixed(1)}" y="${(r[3] * sc).toFixed(1)}" width="${((r[4] - r[2]) * sc).toFixed(1)}" height="${((r[5] - r[3]) * sc).toFixed(1)}"/>`;
     const cx = F.rooms.reduce((a, r) => a + (r[2] + r[4]) / 2, 0) / F.rooms.length, cy = F.rooms.reduce((a, r) => a + (r[3] + r[5]) / 2, 0) / F.rooms.length;
-    s += `<text x="${((cx - xs[0]) * sc).toFixed(0)}" y="${(cy * sc + 3.5).toFixed(0)}">${f}${F.n}</text></g>`;
+    s += `<text x="${((cx - xs[0]) * sc).toFixed(0)}" y="${(cy * sc + 3.5).toFixed(0)}">${on ? f + F.n : esc(am.split(' ')[0])}</text></g>`;
   }
   s += `<text class="kp-road" x="${Wd / 2}" y="${H - 2}">11 m road ↓</text></svg>`;
   const key = STATUSES.map(x => `<span><i class="w-sq k-${x}"></i>${ST[x]}</span>`).join('') + (v && v.state.flat && v.state.mode !== 'floor' ? '<span><i class="w-sq k-sel"></i>This flat</span>' : '');
@@ -172,7 +175,7 @@ function render(keepScroll) {
     const c = counts({ wing: w }), ks = flatsOfWing(w);
     let rows = '';
     for (let fl = NF; fl >= 1; fl--) {
-      const ids = ks.map(x => unitId(w, fl, FLATS[x].n)), a = ids.filter(id => statusOf(id) === 'available').length;
+      const ids = ks.filter(x => flatOn(x, fl)).map(x => unitId(w, fl, FLATS[x].n)), a = ids.filter(id => statusOf(id) === 'available').length; // floor 1 has 6 flats, not 8
       rows += `<button class="w-flr" data-floor="${fl}"><b>Floor ${fl}</b><span class="av${a ? '' : ' zero'}">${a} of ${ids.length} available</span>${ICON.right || '›'}</button>`;
     }
     h = head(esc(PROJECT.name), `${w} Wing`, `${c.available} of ${c.total} homes available. Choose a floor.`)
@@ -182,7 +185,7 @@ function render(keepScroll) {
     const c = counts({ wing: w, floor: f });
     const step = `<div class="w-step" role="group" aria-label="Change floor"><button data-step="-1" aria-label="Floor below" title="Floor below" ${f <= 1 ? 'disabled' : ''}>${ICON.down}</button><button data-step="1" aria-label="Floor above" title="Floor above" ${f >= NF ? 'disabled' : ''}>${ICON.up}</button></div>`;
     h = head(`${w} Wing · X-ray view`, `Floor ${f}`, `${c.available} of ${c.total} available. Floors above are lifted away so you can see every home.`, step)
-      + sec('Flats', `<div class="w-units">${flatsOfWing(w).map(x => { const id = unitId(w, f, FLATS[x].n), s0 = statusOf(id); return `<button class="w-unit u-${s0}" data-flat="${x}"><span class="r1"><b>${id}</b>${st(s0)}</span><small>${bhk(x)} · ≈ ${FLATS[x].carpet} sq ft</small></button>`; }).join('')}</div>`)
+      + sec('Flats', `<div class="w-units">${flatsOn(w, f).map(x => { const id = unitId(w, f, FLATS[x].n), s0 = statusOf(id); return `<button class="w-unit u-${s0}" data-flat="${x}"><span class="r1"><b>${id}</b>${st(s0)}</span><small>${bhk(x)} · ≈ ${FLATS[x].carpet} sq ft</small></button>`; }).join('')}${flatsOfWing(w).filter(x => amenityOn(x, f)).map(x => `<div class="w-unit w-am"><span class="r1"><b>${esc(amenityOn(x, f))}</b></span><small>For residents, on this floor</small></div>`).join('')}</div>`)
       + sec('Key plan', keyPlan(w, f))
       + `<div class="w-foot"><button class="w-btn ghost" data-go="wing">${ICON.left}${w} Wing</button>${brand}</div>`;
   } else if (S.mode === 'flat') {
@@ -225,6 +228,11 @@ function buildLabels() {
   const S = v.state;
   if (S.mode === 'floor') {
     for (const k of flatsOfWing(S.wing)) {
+      if (!flatOn(k, S.floor)) { // an amenity takes this flat's place on this floor
+        const am = amenityOn(k, S.floor); if (!am) continue;
+        const a = document.createElement('div'); a.className = 'pin pin-am'; a.textContent = am; labels.appendChild(a);
+        labelItems.push({ el: a, pos: v.flatParts[k].center.clone().setY(S.floor * 3 + 1.6) }); continue;
+      }
       const p = v.flatParts[k], el = document.createElement('button'), id = unitId(S.wing, S.floor, FLATS[k].n);
       el.className = 'pin pin-' + statusOf(id); el.innerHTML = `<i></i>${id.split('-')[1]}`; el.setAttribute('aria-label', `${id}, ${ST[statusOf(id)]}`); el.dataset.flat = k; labels.appendChild(el);
       labelItems.push({ el, pos: p.center.clone().setY(S.floor * 3 + 1.6) });
@@ -302,9 +310,12 @@ root.addEventListener('click', e => {
   hint.classList.add('gone');
   render();
 });
+let searchWhy = '';
 function goToFlat(q) {
   const m = String(q).trim().toUpperCase().replace(/\s+/g, '').match(/^([AB])-?([1-7])(0[1-8])$/);
+  searchWhy = '';
   if (!m) return false;
+  if (!flatOn(m[1] + m[3], +m[2])) { searchWhy = `There is no flat ${m[1]}-${m[2]}${m[3]}. Floor 1 has flats 03 to 08; ${m[3] === '02' ? 'the ' + (amenityOn(m[1] + '02', 1) || 'amenity').toLowerCase() + ' is here instead.' : 'try a higher floor.'}`; return false; }
   const key = m[1] + m[3]; v.state.wing = m[1]; v.state.floor = +m[2]; v.selectFlat(key); hint.classList.add('gone'); render();
   return true;
 }
@@ -312,7 +323,7 @@ root.addEventListener('submit', e => {
   if (!e.target.matches('[data-search]')) return;
   e.preventDefault();
   const err = panel.querySelector('.v-err');
-  if (!goToFlat(e.target.q.value)) { err.hidden = false; err.textContent = 'Try a flat number like A-506 or B-302 (floors 1–7, flats 01–08).'; }
+  if (!goToFlat(e.target.q.value)) { err.hidden = false; err.textContent = searchWhy || 'Try a flat number like A-506 or B-302 (floors 1–7, flats 01–08).'; }
 });
 
 /* ---------- live availability from the sales console ---------- */

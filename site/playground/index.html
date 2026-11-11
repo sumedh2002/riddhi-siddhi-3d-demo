@@ -146,18 +146,13 @@ body{-webkit-font-smoothing:antialiased}
 .w-totals b{margin-left:auto;font:600 13px var(--w-m);color:var(--w-ink)}
 
 /* wing: stacking plan */
-.w-mx{display:grid;gap:2px;margin:0 -8px}
-.w-mx-h,.w-mx-r{display:grid;grid-template-columns:30px minmax(0,1fr) 34px;align-items:center;gap:12px;padding:0 8px}
-.w-mx-h{padding-bottom:4px;font:500 10.5px/1 var(--w-m);color:var(--w-ink-3)}
-.w-mx-h>span:last-child,.w-mx-r .av{text-align:right}
-.w-mx-c{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
-.w-mx-h .w-mx-c span{text-align:center}
-.w-mx-r{height:34px;width:100%;border:0;border-radius:7px;background:transparent;text-align:left;cursor:pointer;transition:background .15s}
-.w-mx-r:hover{background:var(--w-bg-2)}
-.w-mx-r .fl{font:600 13px/1 var(--w-m);color:var(--w-ink)}
-.w-mx-r .w-mx-c i{height:16px;border-radius:3px}
-.w-mx-r .av{font:500 13px/1 var(--w-m);color:var(--w-ink-2)}
-.w-mx-r .av.zero{color:var(--w-ink-3);opacity:.6}
+.w-flrs{display:grid;gap:6px}
+.w-flr{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 14px;border:1px solid var(--w-line);border-radius:var(--w-r-s);background:var(--w-bg);color:var(--w-ink);font:500 14px/1 var(--w-f);text-align:left;cursor:pointer;transition:background .15s,border-color .15s}
+.w-flr:hover{background:var(--w-bg-2);border-color:var(--w-ink-3)}
+.w-flr:focus-visible{outline:2px solid var(--w-sel);outline-offset:2px}
+.w-flr .av{margin-left:auto;font-size:13px;color:var(--w-ok)}
+.w-flr .av.zero{color:var(--w-ink-3)}
+.w-flr svg{flex:none;width:14px;height:14px;color:var(--w-ink-3)}
 
 /* floor: flats + key plan */
 .w-units{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -167,6 +162,7 @@ body{-webkit-font-smoothing:antialiased}
 .w-unit b{font:600 13.5px/1 var(--w-m);letter-spacing:-.01em;color:var(--w-ink)}
 .w-unit small{font-size:12px;line-height:1.2;color:var(--w-ink-3)}
 .w-unit.u-booked b,.w-unit.u-sold b{color:var(--w-ink-2)}
+.w-unit.w-am{cursor:default;background:var(--w-bg-2);border-style:dashed}.w-unit.w-am:hover{border-color:var(--w-line)}.w-unit.w-am b{font:600 13px/1.1 var(--w-f);letter-spacing:0}
 .w-kp{display:flex;align-items:flex-end;gap:18px;padding:12px;background:var(--w-bg-2);border:1px solid var(--w-line-2);border-radius:var(--w-r-s)}
 .kp{display:block;flex:none;height:212px;width:auto;max-width:62%}
 .w-kp-key{display:grid;gap:9px;padding-bottom:2px;font-size:11.5px;line-height:1.2;color:var(--w-ink-2)}
@@ -178,6 +174,8 @@ body{-webkit-font-smoothing:antialiased}
 .kp-flat:hover rect{fill:var(--w-sel-t)}.kp-flat.sel rect{fill:var(--w-sel)}
 .kp-flat text{font:600 10px var(--w-m);fill:var(--w-ink);text-anchor:middle;pointer-events:none}
 .kp-flat.sel text{fill:#fff}
+.kp-am rect{fill:var(--w-bg-3);stroke:var(--w-bg-2);stroke-width:1.4}
+.kp-am text{font:500 7px var(--w-m);fill:var(--w-ink-3);text-anchor:middle}
 .kp-road{font:500 8px var(--w-m);fill:var(--w-ink-3);text-anchor:middle;letter-spacing:.03em}
 
 /* flat + inside */
@@ -233,6 +231,7 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
 .pin:hover{border-color:var(--w-ink)}
 .pin i{width:7px;height:7px;border-radius:2px;flex:none}
 .pin-available i{background:var(--w-ok-f)}.pin-hold i{background:var(--w-hold-f)}.pin-booked i{background:var(--w-bad-f)}.pin-sold i{background:var(--w-sold-f)}
+.pin-am{padding:5px 8px;background:var(--w-glass);color:var(--w-ink-2);font:500 11.5px/1 var(--w-f);cursor:default;pointer-events:none}
 .pin-big{gap:8px;padding:7px 10px;border-color:var(--w-accent);background:var(--w-accent);color:var(--w-accent-fg);font:600 12.5px/1 var(--w-m);cursor:default}
 .pin-big span{font:500 12px/1 var(--w-f);opacity:.7}
 .rlabel{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border:1px solid var(--w-line);border-radius:6px;background:var(--w-bg);box-shadow:var(--w-shadow-s);white-space:nowrap;transition:background .15s,border-color .15s,opacity .18s}
@@ -379,6 +378,6 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
   <div class="v-toast" role="status" aria-live="polite" hidden></div>
   <div class="v-fallback" hidden><p>Your browser can't show the 3D model. Try a recent version of Chrome, Safari or Edge.</p></div>
 </div>
-<script src="embed.js?v=202611091559" defer></script>
+<script src="embed.js?v=202611110455" defer></script>
 </body>
 </html>

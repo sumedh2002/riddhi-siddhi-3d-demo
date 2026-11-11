@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-import { FH, NF, CX, CY, BLOCKS, FLATS, COMMON, CORE_A, mx, unitId } from './project-data.js';
+import { FH, NF, CX, CY, BLOCKS, FLATS, COMMON, CORE_A, mx, unitId, flatOn } from './project-data.js';
 import { flatLayout } from './layout.js';
 import { createInteriorKit } from './interiors.js';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
@@ -54,10 +54,12 @@ export function createViewer(root, hooks = {}) {
 
   /* ---------- Materials ---------- */
   const M = {
-    wallA: new THREE.MeshStandardMaterial({ color: 0xe6d3b3, roughness: 0.88 }),
-    wallB: new THREE.MeshStandardMaterial({ color: 0xe6d3b3, roughness: 0.88 }),
+    wallA: new THREE.MeshStandardMaterial({ color: 0xefe3c9, roughness: 0.9 }),
+    wallB: new THREE.MeshStandardMaterial({ color: 0xefe3c9, roughness: 0.9 }),
+    bglass: new THREE.MeshStandardMaterial({ color: 0xcfe2ee, metalness: 0.25, roughness: 0.05, transparent: true, opacity: 0.36, depthWrite: false }),
+    leaf3: new THREE.MeshStandardMaterial({ color: 0x3d6a36, roughness: 0.95 }),
     trim: new THREE.MeshStandardMaterial({ color: 0xfbf8f1, roughness: 0.6 }),
-    glass: new THREE.MeshStandardMaterial({ color: 0x35587d, metalness: 0.6, roughness: 0.08, envMapIntensity: 1.1 }),
+    glass: new THREE.MeshStandardMaterial({ color: 0x4f7697, metalness: 0.8, roughness: 0.06, envMapIntensity: 1.5 }),
     frame: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45 }),
     rail: new THREE.MeshStandardMaterial({ color: 0x3b3f45, metalness: 0.6, roughness: 0.35 }),
     roof: new THREE.MeshStandardMaterial({ color: 0xa8472c, roughness: 0.62 }),
@@ -85,7 +87,7 @@ export function createViewer(root, hooks = {}) {
     line: new THREE.LineBasicMaterial({ color: 0x3b6fd8, transparent: true, opacity: 0.4 }),
     dash: new THREE.LineDashedMaterial({ color: 0x334155, transparent: true, opacity: 0.45, dashSize: 0.8, gapSize: 0.6 })
   };
-  M.glass.envMap = envTex;
+  M.glass.envMap = envTex; M.bglass.envMap = envTex;
   const floorTex = { stone: tileTex('#e6d6bb', '#cdb894', 6, true), wet: tileTex('#d3dce6', '#b7c3d0', 10) };
   const STATUS_TINT = { available: 0xa9e2b8, booked: 0xf2b1b1, hold: 0xf5d48f, sold: 0xc5ccd6 };
 
@@ -169,7 +171,7 @@ export function createViewer(root, hooks = {}) {
   // Residential floors
   for (let lv = 1; lv <= NF; lv++) {
     const z = lv * FH, g = floorGroups[lv];
-    const per = { A: { wall: [], trim: [], glass: [], frame: [], rail: [] }, B: { wall: [], trim: [], glass: [], frame: [], rail: [] } };
+    const per = { A: { wall: [], trim: [], glass: [], frame: [], rail: [], bglass: [] }, B: { wall: [], trim: [], glass: [], frame: [], rail: [], bglass: [] } };
     for (const f of faces) {
       const P = per[f.w];
       P.wall.push(onFace(f, f.a, f.b, -0.23, 0, z, z + FH));
@@ -177,6 +179,7 @@ export function createViewer(root, hooks = {}) {
       P.trim.push(onFace(f, f.a, f.a + 0.45, 0, 0.1, z, z + FH)); // quoins
       P.trim.push(onFace(f, f.b - 0.45, f.b, 0, 0.1, z, z + FH));
       const L = f.b - f.a, n = Math.floor((L - 0.9) / 2.7);
+      for (let k = 1; k < n; k++) { const x = f.a + (L / n) * k; P.trim.push(onFace(f, x - 0.11, x + 0.11, 0, 0.07, z + 0.3, z + FH)); } // pilasters between bays
       for (let k = 0; k < n; k++) {
         const c = f.a + (L / n) * (k + 0.5), big = (f.s === 'S' || f.s === 'N') && (k % 3 === 1);
         const hw = big ? 0.95 : 0.7, s0 = z + (big ? 0.45 : 0.9), s1 = z + 2.35;
@@ -185,16 +188,19 @@ export function createViewer(root, hooks = {}) {
         P.frame.push(onFace(f, c - 0.04, c + 0.04, 0, 0.13, s0, s1)); // mullion
         P.trim.push(onFace(f, c - hw - 0.3, c + hw + 0.3, 0, 0.55, s1 + 0.22, s1 + 0.32)); // chajja
         P.trim.push(onFace(f, c - hw - 0.18, c + hw + 0.18, 0, 0.16, s0 - 0.16, s0 - 0.08)); // sill
-        if (big) { // french balcony railing
-          P.rail.push(onFace(f, c - hw - 0.05, c + hw + 0.05, 0.28, 0.32, z + 1.0, z + 1.05));
-          for (let r = -hw; r <= hw + 0.01; r += 0.2) P.rail.push(onFace(f, c + r - 0.015, c + r + 0.015, 0.29, 0.31, z + 0.35, z + 1.0));
+        if (big) { // balcony: projecting slab, glass railing, slim handrail
+          P.trim.push(onFace(f, c - hw - 0.32, c + hw + 0.32, 0, 0.72, z + 0.28, z + 0.4));
+          P.bglass.push(onFace(f, c - hw - 0.27, c + hw + 0.27, 0.65, 0.68, z + 0.4, z + 1.38));
+          P.bglass.push(onFace(f, c - hw - 0.27, c - hw - 0.24, 0, 0.66, z + 0.4, z + 1.38));
+          P.bglass.push(onFace(f, c + hw + 0.24, c + hw + 0.27, 0, 0.66, z + 0.4, z + 1.38));
+          P.rail.push(onFace(f, c - hw - 0.29, c + hw + 0.29, 0.63, 0.7, z + 1.38, z + 1.43));
         }
       }
     }
     for (const w of ['A', 'B']) {
       const P = per[w];
       const wm = meshOf(P.wall, w === 'A' ? M.wallA : M.wallB); wm.userData.wing = w; wingMeshes.push(wm);
-      [wm, meshOf(P.trim, M.trim), meshOf(P.glass, M.glass, { cast: false }), meshOf(P.frame, M.frame, { cast: false }), meshOf(P.rail, M.rail, { cast: false })].forEach(m => m && g.add(m));
+      [wm, meshOf(P.trim, M.trim), meshOf(P.glass, M.glass, { cast: false }), meshOf(P.frame, M.frame, { cast: false }), meshOf(P.rail, M.rail, { cast: false }), meshOf(P.bglass, M.bglass, { cast: false })].forEach(m => m && g.add(m));
     }
     // slab (floor plate) for the level
     const sl = BLOCKS.map(B => boxG(B.r[0] + 0.05, B.r[1] + 0.05, B.r[2] - 0.05, B.r[3] - 0.05, z, z + 0.05));
@@ -266,7 +272,13 @@ export function createViewer(root, hooks = {}) {
     site.add(meshOf(dashes, M.trim, { cast: false }));
     // context buildings
     const ctx = [[-34, -8, -10, 16, 18], [-32, -40, -8, -14, 14], [54, -6, 76, 20, 21], [52, -40, 78, -14, 16], [-4, -44, 20, -18, 11], [24, -46, 48, -20, 24]];
-    for (const c of ctx) site.add(meshOf([boxG(c[0], c[1], c[2], c[3], 0, c[4])], M.context));
+    const ctxImg = ctxFacade(), ctxTop = new THREE.MeshStandardMaterial({ color: 0xd9d6cf, roughness: 0.95 }), tints = [0xf1ece2, 0xe6e9ec, 0xefe6d8];
+    ctx.forEach((c, i) => {
+      const w = c[2] - c[0], d = c[3] - c[1], h = c[4];
+      const side = len => { const t = ctxImg.clone(); t.needsUpdate = true; t.repeat.set(Math.max(1, Math.round(len / 8)), Math.max(1, Math.round(h / 12))); return new THREE.MeshStandardMaterial({ map: t, color: tints[i % 3], roughness: 0.92 }); };
+      const sx = side(d), sz = side(w), m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [sx, sx, ctxTop, ctxTop, sz, sz]);
+      m.position.set((c[0] + c[2]) / 2 - CX, h / 2, (c[1] + c[3]) / 2 - CY); m.castShadow = true; m.receiveShadow = true; m.userData.context = true; site.add(m);
+    });
     // trees
     for (const p of [[-1.0, 26.5], [4.5, 26.6], [10.0, 26.6], [33.0, 26.6], [38.5, 26.6], [44.2, 26.6], [44.4, 20], [44.4, 13], [44.4, 6], [44.4, -1.5], [-1.4, 19], [-1.4, 12], [-1.4, 5], [-1.4, -2], [8, -2.3], [16, -2.3], [27, -2.3], [35, -2.3]]) greens.add(tree(p[0], p[1], 1.5));
     for (const p of [[14.6, 26.8], [28.5, 26.8], [-1.2, 26.0]]) greens.add(palm(p[0], p[1]));
@@ -277,11 +289,23 @@ export function createViewer(root, hooks = {}) {
     [[3.0, 18.2, 4], [6.0, 18.2, 5], [36.0, 18.2, 1], [39.0, 18.2, 3]].forEach(([x, y, c]) => greens.add(car(x, y, carCols[c], true)));
   }
 
+  function ctxFacade() { // a tileable strip of a plain neighbouring building: 4 windows across, 4 floors up
+    const cv = document.createElement('canvas'); cv.width = cv.height = 256; const c = cv.getContext('2d');
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, 256, 256);
+    for (let r = 0; r < 4; r++) { c.fillStyle = 'rgba(0,0,0,.07)'; c.fillRect(0, r * 64 + 60, 256, 4); for (let k = 0; k < 4; k++) { c.fillStyle = (r + k) % 3 ? '#8fa3b5' : '#a9b9c7'; c.fillRect(k * 64 + 16, r * 64 + 16, 32, 30); c.fillStyle = 'rgba(255,255,255,.55)'; c.fillRect(k * 64 + 31, r * 64 + 16, 2, 30); } }
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+  }
   function tree(x, y, s = 1.4, z0 = 0) {
     const g = new THREE.Group();
     const t = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * s, 0.18 * s, 2.4 * s, 6), M.trunk); t.position.y = 1.2 * s; t.castShadow = true; g.add(t);
-    for (const [r, px, py, pz, m] of [[1.45, 0, 3.0, 0, M.leaf], [1.1, 0.7, 3.5, 0.4, M.leaf2], [1.0, -0.6, 3.6, -0.3, M.leaf2], [0.9, 0.1, 4.2, -0.5, M.leaf]]) {
-      const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r * s, 1), m); c.position.set(px * s, py * s, pz * s); c.castShadow = true; g.add(c);
+    const seed = hash(x + ':' + y) * 40;
+    for (const [r, px, py, pz, m] of [[1.4, 0, 3.0, 0, M.leaf3], [1.15, 0.8, 3.4, 0.4, M.leaf], [1.05, -0.7, 3.5, -0.3, M.leaf], [1.0, 0.1, 4.1, -0.5, M.leaf2], [0.85, -0.2, 4.0, 0.7, M.leaf2]]) {
+      const cg = new THREE.IcosahedronGeometry(r * s, 2), cp = cg.attributes.position;
+      for (let i = 0; i < cp.count; i++) { // gentle bumps so the canopy isn't a ball (same push for vertices that share a spot)
+        const X = cp.getX(i), Y = cp.getY(i), Z = cp.getZ(i), k = 1 + 0.13 * Math.sin(X * 2.7 + seed) * Math.cos(Z * 3.1 - seed) + 0.09 * Math.sin(Y * 3.7 + seed * 2);
+        cp.setXYZ(i, X * k, Y * k * 0.86, Z * k);
+      }
+      const c = new THREE.Mesh(cg, m); c.position.set(px * s, py * s, pz * s); c.castShadow = true; g.add(c);
     }
     g.position.copy(W(x, y, z0)); g.rotation.y = hash(x + ',' + y) * 6; return g;
   }
@@ -476,7 +500,8 @@ export function createViewer(root, hooks = {}) {
       const sel = state.flat === k, hov = state.hoverFlat === k;
       const dim = (state.mode === 'apt' && !sel);
       const apt = state.mode === 'apt';
-      const tint = (sel && apt) ? 0xffffff : sel ? 0x9ec0ff : hov ? 0xc9d9ff : (inWing ? STATUS_TINT[st] : 0xe9ebee);
+      const on = flatOn(k, state.floor || 2);
+      const tint = !on ? 0xdfe2e6 : (sel && apt) ? 0xffffff : sel ? 0x9ec0ff : hov ? 0xc9d9ff : (inWing ? STATUS_TINT[st] : 0xe9ebee);
       for (const fm of p.floorMats) { fm.color.setHex(tint); fm.transparent = dim; fm.opacity = dim ? 0.35 : 1; fm.emissive.setHex(sel && !apt ? 0x1d4ed8 : 0x000000); fm.emissiveIntensity = sel && !apt ? 0.1 : 0; }
       p.wallMat.color.setHex(0xfdfdfb); p.wallMat.emissive.setHex(sel && !apt ? 0x2563eb : 0x000000); p.wallMat.emissiveIntensity = sel && !apt ? 0.35 : 0;
       const showInt = apt && sel && state.furnished;
@@ -541,7 +566,7 @@ export function createViewer(root, hooks = {}) {
     if (state.mode === 'floor' || state.mode === 'flat') {
       const objs = []; for (const k in flatParts) { const p = flatParts[k]; if (!state.wing || FLATS[k].wing === state.wing) p.group.children.forEach(c => objs.push(c)); }
       const hit = ray.intersectObjects(objs, false)[0];
-      return hit ? { flat: hit.object.userData.flat } : null;
+      return hit && flatOn(hit.object.userData.flat, state.floor) ? { flat: hit.object.userData.flat } : null;
     }
     return null;
   }

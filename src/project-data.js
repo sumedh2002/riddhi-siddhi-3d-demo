@@ -38,9 +38,13 @@ function ftIn(s) { const m = s.match(/(\d+)'(\d+)"\s*×\s*(\d+)'(\d+)"/); if (!m
 for (const k in FLATS) { const f = FLATS[k]; f.carpet = Math.round(f.rooms.reduce((a, r) => a + ftIn(r[6]), 0) / 5) * 5; }
 
 export function unitId(w, fl, n) { return `${w}-${fl}${n}`; }
+/* Floor 1 is different from the floors above (brochure "1st floor plan"): flat 01 isn't built there,
+   and flat 02's place is the fitness centre (A wing) or the society office (B wing). */
+export const FLOOR_AMENITY = { 1: { A02: 'Fitness centre', B02: 'Society office' } };
+export const flatOn = (key, fl) => !(+fl === 1 && (key.slice(1) === '01' || key.slice(1) === '02'));
 /** Every flat in the project: [{ id: 'A-506', key: 'A06', wing: 'A', floor: 5, n: '06' }, …] */
 export function allUnits() {
   const out = [];
-  for (const w of PROJECT.wings) for (let fl = 1; fl <= NF; fl++) for (const n of Object.keys(FLATS_A).sort()) out.push({ id: unitId(w, fl, n), key: w + n, wing: w, floor: fl, n });
+  for (const w of PROJECT.wings) for (let fl = 1; fl <= NF; fl++) for (const n of Object.keys(FLATS_A).sort()) if (flatOn(w + n, fl)) out.push({ id: unitId(w, fl, n), key: w + n, wing: w, floor: fl, n });
   return out;
 }
