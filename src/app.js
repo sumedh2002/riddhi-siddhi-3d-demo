@@ -78,14 +78,14 @@ const orbPrev = orbEl.querySelector('.v-orb-prev'), orbNext = orbEl.querySelecto
 let orbDir = 1, orbK = PREMIUM_SITE ? PREMIUM_SITE.start : 0, orbShown = -1, orbAll = false, orbTimer = null, orbDrag = null;
 const orbUrl = k => `${PREMIUM_SITE.dir}${PREMIUM_SITE.frames[k]}.jpg`;
 function showOrb() {
-  orbPrev.disabled = orbK <= 0; orbNext.disabled = orbK >= ORB_N - 1;
+  orbPrev.disabled = !PREMIUM_SITE.loop && orbK <= 0; orbNext.disabled = !PREMIUM_SITE.loop && orbK >= ORB_N - 1;
   if (orbShown === orbK) return;
   const k = orbK, cur = orbImgs.find(i => i.classList.contains('on')) || orbImgs[1], nxt = cur === orbImgs[0] ? orbImgs[1] : orbImgs[0];
   nxt.onload = () => { if (orbK !== k) return; nxt.classList.add('on'); cur.classList.remove('on'); };
   nxt.alt = `${PROJECT.name}, view ${k + 1} of ${ORB_N} (AI visualisation)`; nxt.src = orbUrl(k); orbShown = k;
   if (!orbAll) { orbAll = true; setTimeout(() => { for (let i = 0; i < ORB_N; i++) new Image().src = orbUrl(i); }, 600); }
 }
-function stepOrb(d) { const n = Math.max(0, Math.min(ORB_N - 1, orbK + d)); if (n === orbK) return false; orbK = n; showOrb(); return true; }
+function stepOrb(d) { const n = PREMIUM_SITE.loop ? (orbK + d + ORB_N) % ORB_N : Math.max(0, Math.min(ORB_N - 1, orbK + d)); if (n === orbK) return false; orbK = n; showOrb(); return true; }
 function orbUsed() { orbEl.classList.add('used'); clearInterval(orbTimer); orbTimer = null; }
 orbEl.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; orbDrag = e.clientX; orbEl.classList.add('drag'); orbUsed(); try { orbEl.setPointerCapture(e.pointerId); } catch (err) { /* ok */ } });
 orbEl.addEventListener('pointermove', e => { if (orbDrag === null) return; const dx = e.clientX - orbDrag, step = Math.max(40, orbEl.clientWidth / 14); if (Math.abs(dx) >= step) { stepOrb(dx < 0 ? 1 : -1); orbDrag = e.clientX; } });
@@ -96,7 +96,7 @@ function syncLabelMode() {
   planEl.hidden = !(S.mode === 'apt' || (S.mode === 'site' && PREMIUM_SITE));
   premBtn.hidden = !(P || (S.mode === 'site' && PREMIUM_SITE));
   root.classList.toggle('v-orb', orb); orbEl.hidden = !orb;
-  if (orb) { showOrb(); v.setAutoRotate(false); if (!orbTimer && !orbEl.classList.contains('used')) orbTimer = setInterval(() => { if (!stepOrb(orbDir)) { orbDir = -orbDir; stepOrb(orbDir); } }, 3500); }
+  if (orb) { showOrb(); v.setAutoRotate(false); if (!orbTimer && !orbEl.classList.contains('used')) orbTimer = setInterval(() => { if (!stepOrb(orbDir)) { orbDir = -orbDir; stepOrb(orbDir); } }, 2600); }
   else if (orbTimer) { clearInterval(orbTimer); orbTimer = null; }
   planEl.querySelectorAll('button').forEach(b => { const on = b.dataset.act === tier; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
   root.classList.toggle('v-prem', pv);

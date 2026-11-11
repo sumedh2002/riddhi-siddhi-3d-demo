@@ -11,7 +11,7 @@ export const PREMIUM_FINISHES = { tile: 'Vitrified tile', wood: 'Wooden', marble
 export const FACE_KEYS = ['n', 'e', 's', 'w', 'u', 'd'];
 /* Photo-real views of the building (project view): the front arc only (front-left, front, front-right, 30° apart),
    because AI views of the sides and back don't stay consistent with each other. */
-export const PREMIUM_SITE = { dir: 'premium/building/', frames: ['day-00', 'day-01', 'day-02'], start: 0 };
+export const PREMIUM_SITE = { dir: 'premium/building/', frames: Array.from({ length: 12 }, (_, i) => 'air-' + String(i).padStart(2, '0')), start: 0, loop: true }; // aerial 360°, one photo every 30°
 export const PREMIUM = {
   A06: {
     dir: 'premium/a-506/',
