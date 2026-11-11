@@ -9,6 +9,7 @@ import { STATUSES, STATUS_LABEL, getUnit, counts, updateUnit, updateUnits, recen
 const app = document.getElementById('app');
 const toastEl = document.getElementById('toast');
 const THUMB = (document.getElementById('thumb') || {}).src || '';
+const SITE = typeof __SITE_LINK__ === 'string' ? __SITE_LINK__ : 'index.html'; // where the 3D explorer lives, relative to this page
 const UNITS = allUnits();
 const FLAT_NOS = Object.keys(FLATS).filter(k => k[0] === 'A').map(k => k.slice(1)).sort(); // '01'…'08'
 const SESSION_KEY = 'arch3:console:session', MODE_KEY = 'arch3:console:view';
@@ -131,7 +132,7 @@ function shell(content, ins = true) {
         <a href="#activity" class="${on('activity')}">${I.pulse}Activity${logN ? `<span class="count">${logN}</span>` : ''}</a>
       </nav>
       <div class="nav-sep"></div>
-      <nav class="nav" aria-label="Links"><a href="index.html?v=${V}#explore" target="_blank" rel="noopener">${I.ext}Open 3D website</a></nav>
+      <nav class="nav" aria-label="Links"><a href="${SITE}?v=${V}#explore" target="_blank" rel="noopener">${I.ext}Open 3D website</a></nav>
       <div class="rail-user"><span class="av" aria-hidden="true">${esc(initials(n))}</span><div><b>${esc(n)}</b><small>${isDemo() ? 'Demo account' : 'Sales manager · live'}</small></div>${themeBtn('out')}<button class="out" data-act="logout" aria-label="Sign out" title="Sign out">${I.out}</button></div>
     </aside>
     ${S.drawer ? '<div class="scrim" data-act="drawer-close"></div>' : ''}
@@ -201,7 +202,7 @@ function dd(key, label, opts) {
 function inventoryPage() {
   const lu = lastUpdated();
   return `<div class="head"><div class="head-l"><h1>Inventory</h1><p class="sub">${esc(PROJECT.name)} · ${lu ? `Last update ${rel(lu)}` : 'No updates yet'}</p></div>
-      <div class="actions"><button class="btn" data-act="export">${I.down}Export</button><a class="btn dark" href="index.html?v=${V}#explore" target="_blank" rel="noopener">${I.ext}View website</a></div></div>
+      <div class="actions"><button class="btn" data-act="export">${I.down}Export</button><a class="btn dark" href="${SITE}?v=${V}#explore" target="_blank" rel="noopener">${I.ext}View website</a></div></div>
     <div class="fbar">
       <div class="seg" role="tablist" aria-label="Wing">${['A', 'B'].map(w => `<button role="tab" aria-selected="${S.wing === w}" class="${S.wing === w ? 'on' : ''}" data-wing="${w}">${w} Wing</button>`).join('')}</div>
       ${dd('status', 'Status', STATUSES)}
@@ -265,7 +266,7 @@ function pop() {
   return `${narrow() ? '<div class="pop-scrim" data-act="close"></div>' : ''}
   <section class="pop${S.popEnter ? ' enter' : ''}" role="dialog" aria-label="Flat ${id}">
     <div class="pop-h"><span class="grip">${I.grip}</span><b>Flat <span class="mono">${id}</span></b>
-      <span style="margin-left:auto;display:flex"><a class="ib" href="index.html?flat=${id}&inside=1&v=${V}#explore" target="_blank" rel="noopener" title="See in 3D" aria-label="See ${id} in 3D">${I.ext}</a><button class="ib" data-act="close" aria-label="Close">${I.x}</button></span></div>
+      <span style="margin-left:auto;display:flex"><a class="ib" href="${SITE}?flat=${id}&inside=1&v=${V}#explore" target="_blank" rel="noopener" title="See in 3D" aria-label="See ${id} in 3D">${I.ext}</a><button class="ib" data-act="close" aria-label="Close">${I.x}</button></span></div>
     <div class="pop-meta">
       <div>${I.building}${p.wing} Wing · Floor ${p.floor}</div>
       <div>${I.ruler}${F.bhk} BHK · ≈ ${F.carpet} sq ft carpet</div>
@@ -357,7 +358,7 @@ function exportCsv() {
   toast(`${I.check}Exported ${UNITS.length} flats as a CSV file`);
 }
 function copyLink(id) {
-  const url = new URL(`index.html?flat=${id}&inside=1&v=${V}#explore`, location.href).href;
+  const url = new URL(`${SITE}?flat=${id}&inside=1&v=${V}#explore`, location.href).href;
   const done = () => toast(`${I.check}Link to ${id} in 3D copied`), fail = () => toast(`Copy this link: ${esc(url)}`);
   try { navigator.clipboard.writeText(url).then(done, fail); } catch (e) { fail(); }
 }

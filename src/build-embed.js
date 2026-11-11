@@ -43,6 +43,17 @@ ${markup}
 </html>
 `;
   fs.writeFileSync(path.join(OUT, 'index.html'), html);
+  // Optional: the sales console next to it, e.g. node src/build-embed.js site/playground ../assets/fonts/ site/console
+  const CONSOLE = process.argv[4] && path.resolve(process.argv[4]);
+  if (CONSOLE) {
+    const link = path.relative(CONSOLE, OUT).split(path.sep).join('/') + '/index.html';
+    const c = await esbuild.build({ entryPoints: [path.join(SRC, 'admin.js')], bundle: true, format: 'iife', minify: true, write: false, target: ['es2020'], legalComments: 'none', define: { __BUILD__: JSON.stringify(BUILD), __SITE_LINK__: JSON.stringify(link) } });
+    let h = fs.readFileSync(path.join(SRC, 'admin.html'), 'utf8');
+    h = h.replace(/\{\{img:([a-z0-9_]+)\}\}/g, (m, n) => 'data:image/jpeg;base64,' + fs.readFileSync(path.join(SRC, 'img', n + '.jpg')).toString('base64'));
+    h = h.replace('{{script}}', () => c.outputFiles[0].text.replace(/<\/script/gi, '<\\/script'));
+    fs.mkdirSync(CONSOLE, { recursive: true }); fs.writeFileSync(path.join(CONSOLE, 'index.html'), h);
+    console.log('console ->', CONSOLE, 'links to', link);
+  }
   const pdir = path.join(SRC, 'premium');
   if (fs.existsSync(pdir)) fs.cpSync(pdir, path.join(OUT, 'premium'), { recursive: true });
   console.log('embed ->', OUT, (r.outputFiles[0].text.length / 1024).toFixed(0) + 'KB js', 'build', BUILD);
