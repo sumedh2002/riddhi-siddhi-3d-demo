@@ -1,7 +1,7 @@
 # usage: blender -b -P scene.py -- <outdir> <frames> <width> <samples> [only_frame]
 import bpy, bmesh, math, sys, os, json, random, time, addon_utils
 from mathutils import Vector
-a = sys.argv[sys.argv.index('--') + 1:]; OUT = a[0]; N = int(a[1]); W = int(a[2]); SAMPLES = int(a[3]); ONLY = int(a[4]) if len(a) > 4 else -1
+a = sys.argv[sys.argv.index('--') + 1:]; OUT = a[0]; N = int(a[1]); W = int(a[2]); SAMPLES = int(a[3]); ONLY = int(a[4]) if len(a) > 4 else -1; SKIP = int(a[5]) if len(a) > 5 else 0
 D = os.path.dirname(os.path.abspath(__file__)); t0 = time.time(); random.seed(7)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=D + '/building.glb')
@@ -106,8 +106,14 @@ except Exception: pass
 sc.view_settings.exposure = -0.55
 cam = bpy.data.cameras.new('Cam'); cam.sensor_fit = 'HORIZONTAL'; cam.angle = math.radians(38); cam.clip_start = 1; cam.clip_end = 6000; co = bpy.data.objects.new('Cam', cam); sc.collection.objects.link(co); sc.camera = co
 print('SCENE built in %.0fs' % (time.time() - t0), flush=True)
+if os.environ.get('FRONT'):   # straight-on view from across the road: clear whatever stands between the camera and the building
+    for o in list(bpy.data.objects):
+        if o.location.y < -31 and abs(o.location.x) < 400 and (o.name.startswith('nb') or o.name.startswith('t') or (o.type == 'MESH' and o.data.materials and o.data.materials[0].name == 'nroof')): bpy.data.objects.remove(o)
+    cam.sensor_fit = 'VERTICAL'; cam.angle_y = math.radians(30); co.location = Vector((0, -128, 13)); co.rotation_euler = (Vector((0, 0, 11.5)) - co.location).to_track_quat('-Z', 'Y').to_euler()
+    sc.render.resolution_y = int(W * 0.5625); sc.render.filepath = OUT + '/f-99.jpg'; bpy.ops.render.render(write_still=True); print('FRAME front', flush=True); N = 0
 for k in range(N):
     if k < ONLY: continue
+    if SKIP and k % SKIP == 0: continue   # these angles already exist
     ang = math.radians(-112) - k * 2 * math.pi / N   # frame 0 = front-left, then round anticlockwise seen from above
     co.location = Vector((150 * math.cos(ang), 150 * math.sin(ang), 78)); co.rotation_euler = (Vector((0, 0, 7)) - co.location).to_track_quat('-Z', 'Y').to_euler()
     sc.render.filepath = '%s/f-%02d.jpg' % (OUT, k); t1 = time.time(); bpy.ops.render.render(write_still=True); print('FRAME %d in %.0fs' % (k, time.time() - t1), flush=True)

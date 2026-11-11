@@ -521,7 +521,7 @@ export function createViewer(root, hooks = {}) {
   const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   const fit = o => o.multiplyScalar(camera.aspect < 1 ? 1.4 : 1);
   const VIEW = {
-    site: () => [fit(new THREE.Vector3(-62, 34, 86)).add(new THREE.Vector3(0, 10, 2)), new THREE.Vector3(0, 10, 2)],
+    site: () => [fit(new THREE.Vector3(0, 3, 140)).add(new THREE.Vector3(0, 11, 2)), new THREE.Vector3(0, 11, 2)], // opens straight on, from across the road
     wing: w => { const c = W(w === 'A' ? 11 : 32.1, 12.6, 11); return [c.clone().add(fit(new THREE.Vector3(w === 'A' ? -44 : 40, 28, 54))), c]; },
     floor: (w, f) => { const c = W(w === 'A' ? 11.5 : 31.6, 13, f * FH); return [c.clone().add(fit(new THREE.Vector3(w === 'A' ? -22 : 22, 44, 40))), c]; },
     flat: k => { const p = flatParts[k], c = p.center.clone(); c.y = state.floor * FH + 0.5; const s = p.box.getSize(new THREE.Vector3()).length(); return [c.clone().add(fit(new THREE.Vector3(-0.6 * s - 8, 1.5 * s + 14, 1.0 * s + 14))), c]; },

@@ -6,7 +6,10 @@ P = ("This is a 3D render of a real-estate project seen from a drone: a cream 8-
  "Only add real-world detail and light: the main building is brand new with cream plaster walls, crisp white mouldings, blue-tinted glass windows, glass balcony railings and clay-tiled turret roofs; "
  "a paved compound with a boundary wall and gate; neighbouring apartment blocks with real facades, balconies, windows and rooftop water tanks; asphalt roads with lane markings, kerbs, a few cars and street lights; "
  "real tropical trees and coconut palms in place of the modelled trees; lawns with natural grass. Clear sunny late-morning light in Navi Mumbai, soft realistic shadows, slight atmospheric haze toward the horizon, natural colours, sharp detail. No watermark.")
+PF = P.replace('seen from a drone', 'seen from across the road at about fourth-floor height').replace('an ultra-realistic aerial drone photograph', 'an ultra-realistic photograph, a straight-on front elevation view').replace('real facades, balconies, windows and rooftop water tanks', 'real facades, balconies and windows')
 def run(k):
+    global P
+    if k == 99: P = PF
     src = f'{D}/orbit/f-{k:02d}.jpg'; out = f'{D}/ai/f-{k:02d}.jpg'
     body = {"contents": [{"role": "user", "parts": [{"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(open(src, 'rb').read()).decode()}}, {"text": P}]}], "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "16:9", "imageSize": "2K"}}}
     rq = out + '.req.json'; json.dump(body, open(rq, 'w'))
