@@ -408,6 +408,43 @@ html.v-lock,html.v-lock body{overflow:hidden;overscroll-behavior:none}
   #viewer.v-full .v-topbar{max-width:calc(100% - 68px)}
 }
 #viewer.v-full{--ch:62vh;--ch:62dvh}
+/* phones in the 360 photo view: keep the room visible. Pinch zooms, so the +/- buttons go;
+   controls share one bottom row instead of stacking over the picture. */
+@media (pointer:coarse){
+  #viewer.v-prem .w-tb [data-act="zin"],#viewer.v-prem .w-tb [data-act="zout"]{display:none}
+  @container v (max-width: 820px){
+    #viewer.v-prem .v-plan{display:none} /* the same switch sits just below, under Interior */
+    #viewer.v-prem .v-tools{top:calc(var(--ch) - 50px);left:auto;right:10px}
+    #viewer.v-prem .v-photo-rooms{max-width:calc(100% - 70px)}
+  }
+}
+/* phones in the 360 photo view: controls are see-through so the room shows behind them (same tint as the room labels) */
+@media (pointer:coarse){
+  #viewer.v-prem :is(.v-topbar,.v-photo-rooms,.v-plan,.w-tb,.v-mini,.v-exit){background:rgba(13,17,23,.3);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);border-color:rgba(255,255,255,.22);box-shadow:none}
+  #viewer.v-prem .v-crumbs button,#viewer.v-prem .v-crumbs .sl{color:rgba(255,255,255,.85);text-shadow:0 1px 2px rgba(0,0,0,.45)}
+  #viewer.v-prem .v-crumbs button[aria-current]{color:#fff}
+  #viewer.v-prem :is(.v-photo-rooms,.v-plan) button,#viewer.v-prem .v-plan button b,#viewer.v-prem .w-tb button,#viewer.v-prem .v-exit{color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.45)}
+  #viewer.v-prem :is(.v-photo-rooms,.v-plan) button.on{background:rgba(255,255,255,.92);color:#0D1117;text-shadow:none}
+  #viewer.v-prem .v-plan button.on b{color:#0D1117}
+  #viewer.v-prem .v-mini rect{fill:rgba(255,255,255,.14);stroke:rgba(255,255,255,.75)}
+  #viewer.v-prem .v-mini rect.cur{fill:rgba(37,99,235,.38)}
+  #viewer.v-prem .v-mini .pt{fill:rgba(255,255,255,.85);stroke:none}
+  #viewer.v-prem .v-mini span{color:rgba(255,255,255,.9);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+}
+@media (pointer:coarse) and (max-height:500px){ /* phone turned sideways */
+  @container v (min-width: 821px){
+    #viewer.v-prem .v-tools{top:auto;bottom:12px;left:auto;right:calc(var(--w-side) + 12px)}
+    #viewer.v-prem .v-plan{top:auto;bottom:12px;left:auto;right:calc(var(--w-side) + 64px)}
+    #viewer.v-prem .v-plan button{padding:7px 10px}
+    #viewer.v-prem .v-plan button span{display:none}
+    #viewer.v-prem .v-photo-rooms{max-width:calc(100% - 300px)}
+    #viewer.v-prem:not(.v-collapsed) .v-plan{display:none} /* side panel open: its Interior switch is on screen */
+    #viewer.v-prem:not(.v-collapsed) .v-photo-rooms{max-width:calc(100% - 70px)}
+    #viewer.v-prem .v-mini{top:12px;bottom:auto;right:12px;padding:6px}
+    #viewer.v-prem .v-mini svg{width:84px}
+    #viewer.v-prem .v-mini span{max-width:84px;font-size:9.5px;white-space:normal}
+  }
+}
 @media (prefers-reduced-motion: reduce){.w-live i::after{animation:none}.v-toast{animation:none}}
 
 /* homes */
