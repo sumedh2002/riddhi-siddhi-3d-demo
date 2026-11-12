@@ -17,6 +17,6 @@ export const GOOGLE_MAPS_KEY = '';
 export const MAP_TILES = null;
 /* ESRI_KEY: an ArcGIS Location Platform API key (basemap tiles), restricted to arch3.in. Empty: satellite only on localhost.
    SATELLITE: the imagery's credit line (capture date from Esri's metadata for this plot). */
-export const ESRI_KEY = '';
+export const ESRI_KEY = 'AAPTaIaC2L1ck3WPe9odVlo-GAg..BFNLTsLZrOCNu0esZ6tto8E5D3chDfDnMEWEiV79XwW5azJ1Pg6bU8fmP-krsN8Da270pNAZohhpWQgCJj-aaviewtYjEYviUsSTSJWHNAv7BacsvvZJwXUYiRWPiDpdga4Na8xwSo8RfFiv_anK_-gl9WOibFH-DDWIa62ku8mCuTcz797fYILVBhwWRGybz2xigB22cjThS98T1gkzYbTCkmdgC8BLSlV_Rt3Dbaez0Tq_9gaxG7axHg..AT1_u4qjErKX';
 export const SATELLITE = { credit: 'Imagery © Vantor via Esri · captured Oct 2025' };
 export const MAP = true;
