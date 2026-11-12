@@ -15,4 +15,8 @@ export const SUPABASE_KEY = 'sb_publishable_xSXY93bz8TRgnSf7fmxuRg_7ReGhcNf';
    MAP: set to false to switch the map off and keep the plain surroundings. */
 export const GOOGLE_MAPS_KEY = '';
 export const MAP_TILES = null;
+/* ESRI_KEY: an ArcGIS Location Platform API key (basemap tiles), restricted to arch3.in. Empty: satellite only on localhost.
+   SATELLITE: the imagery's credit line (capture date from Esri's metadata for this plot). */
+export const ESRI_KEY = '';
+export const SATELLITE = { credit: 'Imagery © Vantor via Esri · captured Oct 2025' };
 export const MAP = true;

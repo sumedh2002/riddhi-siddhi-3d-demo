@@ -54,6 +54,15 @@ export const templateTiles = (url, credit, maxZoom = 19) => Promise.resolve({
   name: 'custom', minZoom: 11, maxZoom, land: 0xdfe4dd,
   url: (z, x, y) => url.replace('{z}', z).replace('{x}', x).replace('{y}', y), credit: credit || ''
 });
+/** Esri World Imagery. With an ArcGIS Location Platform key: the basemap tiles endpoint. Without a key the public
+    tile URL is used, but only on localhost, for testing; anywhere else this rejects so the street map is used instead. */
+export function esriTiles(key, credit) {
+  const local = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  if (!key && !local) return Promise.reject(new Error('Satellite imagery needs an Esri key (ESRI_KEY in config.js).'));
+  const base = key ? 'https://ibasemaps-api.arcgis.com' : 'https://server.arcgisonline.com', t = key ? '?token=' + encodeURIComponent(key) : '';
+  return Promise.resolve({ name: 'esri', minZoom: 11, maxZoom: 19, land: 0x5d6552, credit,
+    url: (z, x, y) => `${base}/arcgis/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}${t}` });
+}
 /** Google satellite imagery with road names (Map Tiles API). Rejects if the key cannot open a session. */
 export async function googleTiles(key, site) {
   const k = encodeURIComponent(key), api = 'https://tile.googleapis.com/';
@@ -70,11 +79,14 @@ export async function googleTiles(key, site) {
 }
 
 /* ---------- the ground ---------- */
-const TILES = 4; // each zoom level is a 4 × 4 block of tiles around the building; finer levels sit on top of coarser ones
+// Tiles are picked from the camera, like a map app: a tile is split into its four children while the camera is closer
+// to it than SPLIT × its size, so the ground nearest the camera is the sharpest. ROOT × ROOT tiles at minZoom around the
+// building (±37 km at zoom 11) carry the imagery out to the horizon; only tiles in view and nearer than the haze are fetched.
+const ROOT = 4, SPLIT = 2, BUDGET = 72, PARALLEL = 6, KEEP = 240;
 /**
  * createMapGround({ site, radii, renderer, onChange, onLive })
- * Returns { base, group, rings, frame, setSource(src), update(camDist, seeDist), setRadius(km | null), resize(w, h), live, credit }.
- * base: flat land out to the horizon. group: the tiles (hidden until enough of them have arrived).
+ * Returns { base, group, rings, frame, setSource(src), update(camera, seeDist), setRadius(km | null), resize(w, h), live, credit, stats }.
+ * base: flat land out to the horizon. group: the tiles (hidden until enough of the first ones have arrived).
  * rings: the distance rings and the shade outside the chosen one.
  */
 export function createMapGround({ site, radii, renderer, onChange, onLive }) {
@@ -88,46 +100,71 @@ export function createMapGround({ site, radii, renderer, onChange, onLive }) {
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.012; shadow.receiveShadow = true; shadow.renderOrder = -14; group.add(shadow);
   const quad = new THREE.PlaneGeometry(1, 1); quad.rotateX(-Math.PI / 2); // image top → north
   const loader = new THREE.TextureLoader(), aniso = renderer.capabilities.getMaxAnisotropy();
-  let src = null, levels = [], live = false, batch = null, gen = 0;
+  const box = new THREE.Box3(), frustum = new THREE.Frustum(), pm = new THREE.Matrix4(), cam = new THREE.Vector3();
+  const cache = new Map(); // 'z/x/y' → { z, x, y, mesh, state: 1 loading | 2 shown-able | 3 failed, used }
+  const stats = { requested: 0, loaded: 0, failed: 0 };
+  let src = null, live = false, gen = 0, roots = [], want = [], loading = 0, tick = 0, first = null;
 
+  function drop(t) { if (t.mesh) { group.remove(t.mesh); t.mesh.material.map.dispose(); t.mesh.material.dispose(); t.mesh = null; } }
   function setSource(s) {
-    gen++;
-    for (const L of levels) for (const t of L.tiles) if (t.mesh) { group.remove(t.mesh); t.mesh.material.map.dispose(); t.mesh.material.dispose(); }
-    levels = []; src = s; batch = null;
+    gen++; for (const t of cache.values()) drop(t); cache.clear(); src = s; want = []; loading = 0; first = null;
     if (!s) { setLive(false); return; }
-    for (let z = s.maxZoom; z >= s.minZoom; z--) { // finest first
-      const n = 2 ** z, size = frame.span / n, cx = Math.round(frame.x0 * n), cy = Math.round(frame.y0 * n), tiles = [];
-      for (let ty = cy - TILES / 2; ty < cy + TILES / 2; ty++) for (let tx = cx - TILES / 2; tx < cx + TILES / 2; tx++) if (ty >= 0 && ty < n) tiles.push({ tx, ty, mesh: null });
-      levels.push({ z, n, size, reach: (TILES / 2 - 0.5) * size, tiles, asked: false });
-    }
+    const n = 2 ** s.minZoom, cx = Math.round(frame.x0 * n), cy = Math.round(frame.y0 * n);
+    roots = []; for (let y = cy - ROOT / 2; y < cy + ROOT / 2; y++) for (let x = cx - ROOT / 2; x < cx + ROOT / 2; x++) roots.push([s.minZoom, x, y]);
   }
   function setLive(v) { if (live === v) return; live = v; group.visible = v; base.material.color.setHex(v && src.land ? src.land : PLAIN); onLive && onLive(v, src); onChange && onChange(); }
-  function ask(L, b) {
-    L.asked = true; const g = gen;
-    for (const t of L.tiles) {
-      b.total++;
-      const settle = ok => { if (g !== gen) return; b.done++; if (ok) b.ok++; if (b === batch && b.done === b.total && !live) setLive(b.ok >= b.total * 0.6); };
-      loader.load(src.url(L.z, ((t.tx % L.n) + L.n) % L.n, t.ty), tex => {
-        if (g !== gen) { tex.dispose(); return; }
-        tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = aniso;
-        const m = new THREE.Mesh(quad, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, ...flat }));
-        m.scale.set(L.size, 1, L.size); m.position.set(((t.tx + 0.5) / L.n - frame.x0) * frame.span, 0, ((t.ty + 0.5) / L.n - frame.y0) * frame.span);
-        m.renderOrder = -70 + (L.z - src.minZoom); t.mesh = m; group.add(m);
-        settle(true); onChange && onChange();
-      }, undefined, () => settle(false));
+  const rect = (z, x, y) => { const n = 2 ** z, s = frame.span / n; return [(x / n - frame.x0) * frame.span, (y / n - frame.y0) * frame.span, s, n]; };
+  function pick(k, see) { // the tiles this view needs, finest nearest the camera
+    const out = [], stack = roots.slice();
+    while (stack.length) {
+      const [z, x, y] = stack.pop(), [x0, z0, s, n] = rect(z, x, y);
+      if (y < 0 || y >= n) continue;
+      box.min.set(x0, 0, z0); box.max.set(x0 + s, 0.1, z0 + s); box.applyMatrix4(group.matrixWorld);
+      if (!frustum.intersectsBox(box)) continue;
+      const d = Math.hypot(Math.max(x0 - cam.x, 0, cam.x - x0 - s), cam.y, Math.max(z0 - cam.z, 0, cam.z - z0 - s));
+      if (d > see) continue;
+      if (z < src.maxZoom && d < s * k) stack.push([z + 1, 2 * x, 2 * y], [z + 1, 2 * x + 1, 2 * y], [z + 1, 2 * x, 2 * y + 1], [z + 1, 2 * x + 1, 2 * y + 1]);
+      else out.push([z, x, y]);
     }
+    return out;
   }
-  /** Call every frame: camDist = camera to target, seeDist = how far the ground can be seen (the fog). Loads what that view needs. */
-  function update(camDist, seeDist) {
+  function load(z, x, y) {
+    const n = 2 ** z, t = { z, x, y, mesh: null, state: 1, used: tick }, g = gen; cache.set(z + '/' + x + '/' + y, t); loading++; stats.requested++;
+    const settle = ok => {
+      if (g !== gen) return; loading--; t.state = ok ? 2 : 3; ok ? stats.loaded++ : stats.failed++;
+      if (first && !live && first.left > 0) { if (ok) first.ok++; if (--first.left === 0) setLive(first.ok >= first.n * 0.6); }
+      onChange && onChange();
+    };
+    loader.load(src.url(z, ((x % n) + n) % n, y), tex => {
+      if (g !== gen) { tex.dispose(); return; }
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = aniso;
+      const [x0, z0, s] = rect(z, x, y), m = new THREE.Mesh(quad, new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, ...flat }));
+      m.scale.set(s, 1, s); m.position.set(x0 + s / 2, 0, z0 + s / 2); m.renderOrder = -70 + (z - src.minZoom); m.visible = false;
+      t.mesh = m; group.add(m); settle(true);
+    }, undefined, () => settle(false));
+  }
+  /** Call on every frame drawn: seeDist = how far the ground can be seen (the fog). Shows and fetches what this view needs. */
+  function update(camera, seeDist) {
     if (!src) return;
-    const b = batch || { total: 0, done: 0, ok: 0 }; let finer = null;
-    for (const L of levels) {
-      const coarsest = L === levels[levels.length - 1];
-      if (camDist > 4500 * L.size / 256 && !coarsest) continue; // finer than this view can show
-      if (!L.asked && (!finer || seeDist > finer.reach)) ask(L, b);
-      finer = L;
+    tick++; group.updateMatrixWorld(); camera.updateMatrixWorld();
+    frustum.setFromProjectionMatrix(pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    group.worldToLocal(cam.copy(camera.position));
+    let k = SPLIT, need = pick(k, seeDist);
+    while (need.length > BUDGET && k > 0.5) need = pick(k *= 0.75, seeDist); // over budget: a little softer, never more tiles
+    for (const t of cache.values()) if (t.mesh) t.mesh.visible = false;
+    want = [];
+    for (const [z, x, y] of need) {
+      const t = cache.get(z + '/' + x + '/' + y);
+      if (!t) want.push([z, x, y]);
+      if (t && t.mesh) { t.mesh.visible = true; t.used = tick; continue; }
+      for (let pz = z - 1, px = x >> 1, py = y >> 1; pz >= src.minZoom; pz--, px >>= 1, py >>= 1) { // until it arrives, its nearest loaded parent stands in
+        const p = cache.get(pz + '/' + px + '/' + py); if (p && p.mesh) { p.mesh.visible = true; p.used = tick; break; }
+      }
     }
-    if (!batch && b.total) batch = b; // the first view's tiles decide whether the map goes on
+    want.sort((a, b) => a[0] - b[0]); // coarse first, so the whole view fills in quickly and then sharpens
+    if (!first && want.length) first = { n: Math.min(12, want.length), left: Math.min(12, want.length), ok: 0 }; // the first tiles decide whether the map goes on
+    while (loading < PARALLEL && want.length) load(...want.shift());
+    if (cache.size > KEEP) for (const [id, t] of [...cache].filter(([, t]) => t.state !== 1 && t.used < tick).sort((a, b) => a[1].used - b[1].used).slice(0, cache.size - KEEP)) { drop(t); cache.delete(id); }
   }
 
   /* distance rings, centred on the building */
@@ -152,6 +189,7 @@ export function createMapGround({ site, radii, renderer, onChange, onLive }) {
     base, group, rings, frame, setSource, update, setRadius,
     resize(w, h) { for (const m of mats) m.resolution.set(w, h); },
     get live() { return live; },
-    get credit() { return src ? src.credit : ''; }
+    get credit() { return src ? src.credit : ''; },
+    stats
   };
 }

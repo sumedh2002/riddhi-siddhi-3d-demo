@@ -4,8 +4,8 @@ import { PROJECT, flatOn, FLOOR_AMENITY } from './project-data.js';
 import { PREMIUM, PREMIUM_SITE, PREMIUM_FINISHES, FACE_KEYS, premiumSet } from './premium.js';
 import { createPano } from './pano.js';
 import { SITE, RADII, CATS, PLACES } from './nearby.js';
-import { osmTiles, googleTiles, templateTiles, fmtDist, fmtRing } from './mapground.js';
-import { GOOGLE_MAPS_KEY, MAP_TILES, MAP } from './config.js';
+import { osmTiles, googleTiles, templateTiles, esriTiles, fmtDist, fmtRing } from './mapground.js';
+import { GOOGLE_MAPS_KEY, MAP_TILES, MAP, ESRI_KEY, SATELLITE } from './config.js';
 
 const { FLATS, NF } = DATA;
 const root = document.getElementById('viewer');
@@ -488,7 +488,7 @@ try {
   if (MAP !== false && qs.get('map') !== '0' && !(typeof __BUILD__ !== 'undefined' && __BUILD__ === 'export')) {
     const key = qs.get('gmaps_key') || root.dataset.mapsKey || GOOGLE_MAPS_KEY; // a key in the address bar or on the widget's tag wins, handy for trying one out
     const fallback = MAP_TILES && MAP_TILES.url ? () => templateTiles(MAP_TILES.url, MAP_TILES.credit, MAP_TILES.maxZoom) : osmTiles;
-    v.setMap({ site: SITE, radii: RADII, source: key ? googleTiles(key, SITE).catch(err => { console.warn('[Arch3] ' + err.message); toast('<b>Google Maps is not on</b><span>Showing the standard map instead</span>'); return fallback(); }) : fallback() });
+    v.setMap({ site: SITE, radii: RADII, source: qs.get('sat') === '1' ? esriTiles(ESRI_KEY, SATELLITE.credit).catch(fallback) : key ? googleTiles(key, SITE).catch(err => { console.warn('[Arch3] ' + err.message); toast('<b>Google Maps is not on</b><span>Showing the standard map instead</span>'); return fallback(); }) : fallback() });
   }
   render();
   window.__viewer = v;

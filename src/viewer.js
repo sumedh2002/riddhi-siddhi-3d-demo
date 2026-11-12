@@ -34,8 +34,17 @@ export function createViewer(root, hooks = {}) {
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envTex = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
-  scene.background = skyTexture();
-  scene.fog = new THREE.Fog(0xdfe7ef, 170, 420);
+  // Sky: a gradient by height above the horizon (not across the screen), so the horizon colour is always the fog colour
+  // and the far ground fades into the sky with no band or edge. Dusk tones in the dark theme.
+  const dark = root.dataset.theme === 'dark';
+  const SKY = { zen: new THREE.Color(dark ? '#1d2848' : '#4b84c6'), hor: new THREE.Color(dark ? '#5f6279' : '#c4d0dc') };
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), new THREE.ShaderMaterial({
+    uniforms: { zen: { value: SKY.zen }, hor: { value: SKY.hor } }, side: THREE.BackSide, depthTest: false, depthWrite: false, fog: false,
+    vertexShader: 'varying vec3 vDir;\nvoid main() { vDir = position; gl_Position = (projectionMatrix * mat4(mat3(viewMatrix)) * vec4(position, 1.0)).xyww; }',
+    fragmentShader: 'uniform vec3 zen, hor; varying vec3 vDir;\nvoid main() {\n  gl_FragColor = vec4(mix(hor, zen, pow(max(normalize(vDir).y, 0.0), 0.5)), 1.0);\n  #include <colorspace_fragment>\n}'
+  }));
+  sky.frustumCulled = false; sky.renderOrder = -100; scene.add(sky);
+  scene.fog = new THREE.Fog(SKY.hor, 170, 420);
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 900);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -424,7 +433,7 @@ export function createViewer(root, hooks = {}) {
     const refl = new Reflector(new THREE.PlaneGeometry(b.w + 0.4, b.h + 0.4), { textureWidth: tw, textureHeight: th, clipBias: 0.002, multisample: 4 });
     refl.rotation.x = -Math.PI / 2; refl.position.set(b.cx - CX, res.FL, b.cy - CY);
     refl.material.colorWrite = false; refl.material.depthWrite = false; refl.renderOrder = -10;
-    const hide = []; res.group.traverse(o => { if (o.isMesh && o.userData.noReflect) hide.push(o); });
+    const hide = [sky]; res.group.traverse(o => { if (o.isMesh && o.userData.noReflect) hide.push(o); });
     const orig = refl.onBeforeRender;
     refl.onBeforeRender = function (r, s, c, ...rest) {
       const bg = s.background; s.background = ceilBg; hide.forEach(o => { o.visible = false; });
@@ -534,17 +543,20 @@ export function createViewer(root, hooks = {}) {
     Promise.resolve(source).then(s => { ground.setSource(s); lastD = -1; invalidate(); }, () => {});
   }
   function farView(D) { // everything that depends on how far out the camera is. Up to 200 m nothing differs from before.
-    const fogF = Math.max(420, 4.5 * D - 480);
-    scene.fog.near = Math.max(170, 1.6 * D - 150); scene.fog.far = fogF;
+    // with the map on, the haze starts past what the camera is looking at and reaches full strength well beyond it
+    const mapOn = ground && ground.live, fogF = mapOn ? Math.max(2600, 4 * D) : Math.max(420, 4.5 * D - 480);
+    scene.fog.near = mapOn ? Math.max(300, D) : Math.max(170, 1.6 * D - 150); scene.fog.far = fogF;
+    // the map view never tips up so far that the horizon takes over: up to 84.6° from top-down at the building, 75° once out over the map
+    controls.maxPolarAngle = LOW - (LOW - TOP) * Math.min(1, Math.max(0, (D - CLASSIC) / CLASSIC));
     camera.near = D > 260 ? D * 0.012 : 0.5; camera.far = Math.max(900, fogF * 1.15); camera.updateProjectionMatrix();
     controls.zoomSpeed = D > 210 ? 2.6 : 1; controls.screenSpacePanning = D <= 260;
-    if (ground) { ground.base.visible = ground.live || D > 230; ground.update(D, fogF); }
+    if (ground) ground.base.visible = ground.live || D > 230;
   }
 
   /* Zooming out of the building tips the view up, the way a map does, so the ground and the rings open out instead of
      being seen edge-on; zooming back in brings the camera down to where it was. Turning the view by hand out there
      leaves it in the visitor's hands until they are back at the building. Inside the first 200 m nothing is touched. */
-  const LOW = controls.maxPolarAngle, HIGH = 40 * Math.PI / 180, sph = new THREE.Spherical(), offv = new THREE.Vector3(), downs = new Set();
+  const LOW = Math.PI * 0.47, TOP = 75 * Math.PI / 180, HIGH = 40 * Math.PI / 180, sph = new THREE.Spherical(), offv = new THREE.Vector3(), downs = new Set();
   let rest = null, byHand = false, turning = false, lastPhi = null;
   renderer.domElement.addEventListener('pointerdown', ev => { downs.add(ev.pointerId); turning = downs.size === 1 && (ev.pointerType !== 'mouse' || ev.button === 0); });
   ['pointerup', 'pointercancel'].forEach(n => renderer.domElement.addEventListener(n, ev => { downs.delete(ev.pointerId); turning = false; }));
@@ -693,6 +705,7 @@ export function createViewer(root, hooks = {}) {
     if (!dirty) return;
     dirty = false;
     const D = camDist(); if (Math.abs(D - lastD) > 0.005) { lastD = D; farView(D); }
+    if (ground) ground.update(camera, scene.fog.far); // tiles follow the camera: sharpest nearest to it
     renderer.render(scene, camera);
     hooks.onFrame && hooks.onFrame();
   }
@@ -700,11 +713,6 @@ export function createViewer(root, hooks = {}) {
   return api;
 
   /* ---------- textures ---------- */
-  function skyTexture() {
-    const c = document.createElement('canvas'); c.width = 4; c.height = 256; const x = c.getContext('2d');
-    const g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, '#8fb3df'); g.addColorStop(0.55, '#cfdeef'); g.addColorStop(1, '#eef2f5');
-    x.fillStyle = g; x.fillRect(0, 0, 4, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-  }
   function tileTex(base, line, n, veins, rx = 1, ry = 1) {
     const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
     x.fillStyle = base; x.fillRect(0, 0, 256, 256);
