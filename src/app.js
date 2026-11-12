@@ -3,6 +3,9 @@ import { subscribe, lastUpdated, counts, STATUSES, STATUS_LABEL } from './invent
 import { PROJECT, flatOn, FLOOR_AMENITY } from './project-data.js';
 import { PREMIUM, PREMIUM_SITE, PREMIUM_FINISHES, FACE_KEYS, premiumSet } from './premium.js';
 import { createPano } from './pano.js';
+import { SITE, RADII, CATS, PLACES } from './nearby.js';
+import { osmTiles, googleTiles, templateTiles, fmtDist, fmtRing } from './mapground.js';
+import { GOOGLE_MAPS_KEY, MAP_TILES, MAP } from './config.js';
 
 const { FLATS, NF } = DATA;
 const root = document.getElementById('viewer');
@@ -90,10 +93,58 @@ function orbUsed() { orbEl.classList.add('used'); clearInterval(orbTimer); orbTi
 orbEl.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; orbDrag = e.clientX; orbEl.classList.add('drag'); orbUsed(); try { orbEl.setPointerCapture(e.pointerId); } catch (err) { /* ok */ } });
 orbEl.addEventListener('pointermove', e => { if (orbDrag === null) return; const dx = e.clientX - orbDrag, step = Math.max(40, orbEl.clientWidth / 14); if (Math.abs(dx) >= step) { stepOrb(dx < 0 ? 1 : -1); orbDrag = e.clientX; } });
 ['pointerup', 'pointercancel'].forEach(ev => orbEl.addEventListener(ev, () => { orbDrag = null; orbEl.classList.remove('drag'); }));
+/* ---------- Nearby: zoom out of the building to see what is around it (project view) ----------
+   The 3D building stands on the real map (mapground.js). Past NEAR_IN metres the neighbourhood takes over:
+   landmark pins, the distance rings and the list of what lies inside the ring that is in view. */
+const nearBtn = root.querySelector('.v-nearbtn'), radiiEl = root.querySelector('.v-radii'), attrEl = root.querySelector('.v-attr'), compass = root.querySelector('.v-compass');
+radiiEl.innerHTML = RADII.map(km => `<button data-near-r="${km}" aria-pressed="false">${fmtRing(km)}</button>`).join('');
+const near = { on: false, r: RADII[0], off: new Set(), sel: null };
+const NEAR_IN = 300, NEAR_OUT = 235; // camera distance at which the neighbourhood takes over from the building, and hands back
+const ringFor = D => RADII.filter(km => v.ringDist(km * 1000) <= D * 1.12).pop() || RADII[0]; // the largest ring that is fully in view
+function openNear(km) { // km given: fly out to that ring. Not given: the visitor zoomed out by hand, so follow the camera.
+  if (!v.mapOn) return;
+  near.on = true; near.sel = null; near.r = km || ringFor(v.dist());
+  hint.classList.add('gone'); v.setAutoRotate(false); v.setRing(near.r);
+  if (km) v.frameRing(km * 1000);
+  render();
+}
+function closeNear(fly) { if (!near.on) return; near.on = false; near.sel = null; v.setRing(null); if (fly) v.reset(); render(); }
+function showRing(km) { if (!near.on) { openNear(km); return; } near.r = km; v.setRing(km); v.frameRing(km * 1000, 1100); render(true); }
+function nearTick() { // every frame in the project view: the camera's distance decides what is on screen
+  const D = v.dist(), fly = v.flying();
+  if (!near.on) { if (!fly && D > NEAR_IN) openNear(); return; }
+  if (fly) return;
+  if (D < NEAR_OUT) { closeNear(false); return; }
+  const r = ringFor(D); if (r !== near.r) { near.r = r; v.setRing(r); render(true); }
+}
+function pickPlace(id) {
+  const p = PLACES.find(x => x.id === id); if (!p) return;
+  near.sel = near.sel === id ? null : id;
+  const need = RADII.find(km => p.d <= km * 1000);
+  if (near.sel && need && need > near.r) { near.r = need; v.setRing(need); v.frameRing(need * 1000, 1100); } // bring it into view
+  render(true);
+}
+function nearPanel() {
+  const on = c => c ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"', inR = p => p.d <= near.r * 1000;
+  const vis = PLACES.filter(p => !near.off.has(p.c)), ins = vis.filter(inR), out = vis.filter(p => !inR(p));
+  const row = p => `<li><button data-place="${p.id}"${on(near.sel === p.id)} style="--c:${CATS[p.c].color}"><i><svg viewBox="0 0 24 24">${CATS[p.c].icon}</svg></i><span><b>${esc(p.n)}</b><small>${esc(p.note)}</small></span><em>${fmtDist(p.d)}</em></button></li>`;
+  const list = a => a.length ? `<ul class="w-places">${a.map(row).join('')}</ul>` : '<p class="w-note" style="margin:0">Nothing from the chosen categories here. Try a wider radius.</p>';
+  const chips = Object.keys(CATS).filter(c => PLACES.some(p => p.c === c)).map(c => `<button data-near-cat="${c}"${on(!near.off.has(c))} style="--c:${CATS[c].color}"><i></i>${CATS[c].label}<b>${PLACES.filter(p => p.c === c && inR(p)).length}</b></button>`).join('');
+  return head(esc(SITE.area), 'What’s nearby', `${ins.length} place${ins.length === 1 ? '' : 's'} within ${fmtRing(near.r)} of ${esc(shortName)}. Zoom in and out, or pick a distance.`)
+    + sec('Distance from the building', `<div class="w-seg" role="group" aria-label="Distance from the building">${RADII.map(km => `<button data-near-r="${km}"${on(near.r === km)}>${fmtRing(km)}</button>`).join('')}</div>`)
+    + sec('Show', `<div class="w-chips" role="group" aria-label="Show on the map">${chips}</div>`, `within ${fmtRing(near.r)}`)
+    + sec(`Within ${fmtRing(near.r)}`, list(ins), 'Straight-line distance')
+    + (out.length ? sec('Further out', list(out)) : '')
+    + `<div class="w-foot"><button class="w-btn ghost" data-act="near">${ICON.left}3D building</button>${brand}</div>`;
+}
 function syncLabelMode() {
-  const S = v.state, P = premData(), pv = prem.on && !!P, orb = prem.on && S.mode === 'site' && !!PREMIUM_SITE;
+  const S = v.state, P = premData(), pv = prem.on && !!P, nr = near.on && S.mode === 'site', orb = prem.on && S.mode === 'site' && !!PREMIUM_SITE && !nr;
   const furn = S.mode === 'apt' && S.furnished && !pv, tier = pv || orb ? 'premium' : S.furnished ? 'furn' : 'empty';
-  planEl.hidden = !(S.mode === 'apt' || (S.mode === 'site' && PREMIUM_SITE));
+  planEl.hidden = nr || !(S.mode === 'apt' || (S.mode === 'site' && PREMIUM_SITE));
+  root.classList.toggle('v-nr', nr); radiiEl.hidden = !nr; nearBtn.hidden = S.mode !== 'site' || !v.mapOn;
+  nearBtn.classList.toggle('on', nr); nearBtn.setAttribute('aria-pressed', String(nr)); nearBtn.lastElementChild.textContent = nr ? '3D building' : 'Nearby';
+  radiiEl.querySelectorAll('button').forEach(b => { const on = +b.dataset.nearR === near.r; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+  compass.title = nr ? 'North' : 'Direction of the 11 m road';
   premBtn.hidden = !(P || (S.mode === 'site' && PREMIUM_SITE));
   root.classList.toggle('v-orb', orb); orbEl.hidden = !orb;
   if (orb) { showOrb(); v.setAutoRotate(false); if (!orbTimer && !orbEl.classList.contains('used')) orbTimer = setInterval(() => { if (!stepOrb(orbDir)) { orbDir = -orbDir; stepOrb(orbDir); } }, 2600); }
@@ -116,7 +167,8 @@ const ICON = {
   right: svg('<path d="M9 18l6-6-6-6"/>'),
   up: svg('<path d="M18 15l-6-6-6 6"/>'),
   down: svg('<path d="M6 9l6 6 6-6"/>'),
-  arrow: svg('<path d="M5 12h14M13 6l6 6-6 6"/>')
+  arrow: svg('<path d="M5 12h14M13 6l6 6-6 6"/>'),
+  pin: svg('<path d="M12 21s-6.5-5.6-6.5-10.5a6.5 6.5 0 0 1 13 0C18.500 15.400 12 21 12 21z"/><circle cx="12" cy="10.500" r="2.300"/>')
 };
 const st = s => `<span class="w-st st-${s}"><i></i>${ST[s]}</span>`;
 const badge = s => `<span class="w-st w-badge st-${s}"><i></i>${ST[s]}</span>`;
@@ -154,14 +206,17 @@ function render(keepScroll) {
   const prevScroll = panel.scrollTop;
   const S = v.state, w = S.wing, f = S.floor, k = S.flat;
   if (S.mode !== 'apt') topCam = false;
+  if (S.mode !== 'site' && near.on) { near.on = false; near.sel = null; v.setRing(null); }
   // crumbs
   const cr = [['home', shortName]];
   if (w) cr.push(['wing', `${w} Wing`]);
   if (f) cr.push(['floor', `Floor ${f}`]);
   if (k) cr.push(['flat', unitId(w, f, FLATS[k].n)]);
+  if (near.on) cr.push(['near', 'Nearby']);
   crumbs.innerHTML = cr.map(([go, t], i) => `${i ? '<span class="sl" aria-hidden="true">/</span>' : ''}<button data-go="${go}"${i === cr.length - 1 ? ' aria-current="location"' : ''}>${t}</button>`).join('');
   let h = '';
-  if (S.mode === 'site') {
+  if (S.mode === 'site' && near.on) h = nearPanel();
+  else if (S.mode === 'site') {
     const all = counts();
     h = head(esc(PROJECT.location.split(',').slice(-2).join(',').trim()), esc(PROJECT.name), prem.on && PREMIUM_SITE ? `Photo-real views made with AI from the building's 3D model. Pick a wing to explore its floors and flats in live 3D.` : `${all.total} homes in ${PROJECT.wings.length} wings. Choose a wing to see its floors, or go straight to a flat.`)
       + sec('Go to a flat', `<form class="w-search" data-search role="search"><label class="w-sr" for="vq">Flat number</label><input id="vq" name="q" placeholder="Flat number, e.g. A-506" autocomplete="off" spellcheck="false" enterkeyhint="go"><button type="submit">Go${ICON.arrow}</button></form><p class="v-err" role="alert" hidden></p>`)
@@ -169,6 +224,7 @@ function render(keepScroll) {
         const c = counts({ wing: x });
         return `<button class="w-wing" data-wing="${x}" aria-label="${x} Wing, ${c.available} of ${c.total} available"><span class="w-wing-id">${x}</span><span class="w-wing-t"><b>${x} Wing</b><small>${NF} floors · ${c.total} homes · 1 &amp; 2 BHK</small></span><span class="w-wing-n"><b>${c.available}</b><small>of ${c.total}</small></span>${ICON.right}${bar(c)}</button>`;
       }).join('')}</div>`, 'Available')
+      + (!v.mapOn ? '' : sec('Location', `<button class="w-wing" data-act="near" aria-label="See what is nearby on the map"><span class="w-wing-id">${ICON.pin}</span><span class="w-wing-t"><b>What’s nearby</b><small>Schools, clinics, stations, airport</small></span><span class="w-wing-n"><b>${PLACES.length}</b><small>places</small></span>${ICON.right}</button>`))
       + sec('All homes', `<div class="w-totals">${STATUSES.map(s => `<div><i class="w-sq s-${s}"></i>${ST[s]}<b>${all[s]}</b></div>`).join('')}</div>`)
       + `<div class="w-foot">${brand}</div>`;
   } else if (S.mode === 'wing') {
@@ -250,23 +306,40 @@ function buildLabels() {
       const q = rooms[i];
       labelItems.push({ el, pos: r.c.clone().setY(S.floor * 3 + 0.3), area: (q[4] - q[2]) * (q[5] - q[3]) });
     });
+  } else if (S.mode === 'site' && near.on) {
+    for (const p of PLACES) { // landmark pins, standing on the map
+      if (near.off.has(p.c)) continue;
+      const el = document.createElement('button'); el.type = 'button'; el.dataset.place = p.id; el.style.setProperty('--c', CATS[p.c].color);
+      el.className = 'npin' + (p.d > near.r * 1000 ? ' out' : '') + (near.sel === p.id ? ' sel' : '');
+      el.setAttribute('aria-label', `${p.n}, ${p.note}, ${fmtDist(p.d)} away`);
+      el.innerHTML = `<i><svg viewBox="0 0 24 24">${CATS[p.c].icon}</svg></i><span class="ntag"><b>${esc(p.n)}</b><small>${esc(p.note)} · ${fmtDist(p.d)}</small></span>`;
+      labels.appendChild(el); labelItems.push({ el, pos: v.geo(p.lat, p.lng), far: true });
+    }
+    for (const km of RADII) { // each ring's name rides on the side of the ring nearest the camera
+      const el = document.createElement('span'); el.className = 'nring' + (km === near.r ? ' on' : ''); el.textContent = fmtRing(km); labels.appendChild(el);
+      labelItems.push({ el, pos: v.vec(0, 0, 0), ring: km * 1000, far: true });
+    }
+    const el = document.createElement('div'); el.className = 'pin pin-big nsite'; el.innerHTML = `<b>${esc(shortName)}</b>`; labels.appendChild(el);
+    labelItems.push({ el, pos: v.vec(0, 30, 0) });
   }
   syncLabelMode();
+  placeLabels();
 }
-function onFrame() {
-  const cull = labels.classList.contains('furn'), placed = [];
-  for (const it of labelItems) { it.p = v.project(it.pos); it.el.style.transform = `translate(${it.p.x.toFixed(1)}px, ${it.p.y.toFixed(1)}px) translate(-50%,-100%)`; }
+function onFrame() { placeLabels(); if (v.state.mode === 'site') nearTick(); }
+function placeLabels() {
+  const cull = labels.classList.contains('furn'), placed = [], az = v.azimuth();
+  for (const it of labelItems) { if (it.ring) it.pos.set(Math.sin(az) * it.ring, 0, Math.cos(az) * it.ring); it.p = v.project(it.pos); it.el.style.transform = `translate(${it.p.x.toFixed(1)}px, ${it.p.y.toFixed(1)}px) translate(-50%,-100%)`; }
   // in the furnished view, hide labels that would overlap a bigger room's label
   const order = cull ? labelItems.slice().sort((a, b) => (b.el.classList.contains('hot') - a.el.classList.contains('hot')) || (b.area - a.area)) : labelItems;
   for (const it of order) {
-    let show = it.p.z < 1;
+    let show = it.p.z < 1 && (!it.far || v.seen(it.pos));
     if (show && cull && it.el.offsetWidth) {
       const w = it.el.offsetWidth + 6, h = it.el.offsetHeight + 4, r = [it.p.x - w / 2, it.p.y - h, it.p.x + w / 2, it.p.y];
       if (placed.some(q => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) show = false; else placed.push(r);
     }
     it.el.style.visibility = show ? 'visible' : 'hidden';
   }
-  needle.style.transform = `rotate(${(-v.azimuth() * 180 / Math.PI).toFixed(1)}deg)`;
+  needle.style.transform = `rotate(${((near.on ? az - v.north() : -az) * 180 / Math.PI).toFixed(1)}deg)`; // the road side, or north while the map is in view
 }
 function onHover(h) {
   if (!h || (!h.wing && !h.flat)) { tip.hidden = true; return; }
@@ -282,7 +355,7 @@ function onInteract() { hint.classList.add('gone'); root.classList.add('v-drag')
 root.addEventListener('click', e => {
   const t = e.target.closest('button,[data-flat],[data-room],[data-view]'); if (!t) return;
   const S = v.state, d = t.dataset;
-  if (d.go === 'home') v.home();
+  if (d.go === 'home') { closeNear(false); v.home(); }
   else if (d.go === 'wing') v.selectWing(S.wing);
   else if (d.go === 'floor') v.selectFloor(S.floor);
   else if (d.go === 'flat') v.selectFlat(S.flat);
@@ -301,9 +374,13 @@ root.addEventListener('click', e => {
   else if (d.act === 'top' || d.act === 'v3d') { topCam = d.act === 'top'; topCam ? v.topView() : v.view3d(); t.parentElement.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b === t); b.setAttribute('aria-pressed', String(b === t)); }); return; }
   else if (d.act === 'enquire') { enquire(unitId(S.wing, S.floor, FLATS[S.flat].n), bhk(S.flat)); return; }
   else if (d.act === 'orb-prev' || d.act === 'orb-next') { orbUsed(); stepOrb(d.act === 'orb-next' ? 1 : -1); return; }
-  else if (d.act === 'zin') { if (prem.on && premData() && pano) pano.zoom(0.85); else v.zoom(0.75); return; }
-  else if (d.act === 'zout') { if (prem.on && premData() && pano) pano.zoom(1.18); else v.zoom(1.33); return; }
-  else if (d.act === 'reset') { v.reset(); return; }
+  else if (d.act === 'zin') { if (prem.on && premData() && pano) pano.zoom(0.85); else if (near.on) { const D = v.dist(), s = RADII.filter(km => v.ringDist(km * 1000) < D * 0.9).pop(); s ? showRing(s) : closeNear(true); } else v.zoom(0.75); return; }
+  else if (d.act === 'zout') { if (prem.on && premData() && pano) pano.zoom(1.18); else if (S.mode === 'site' && v.mapOn && v.dist() * 1.33 > 215) { const D = v.dist(), n = RADII.find(km => v.ringDist(km * 1000) > D * 1.1); if (n) showRing(n); } else v.zoom(1.33); return; } // past the building, each step is the next ring
+  else if (d.act === 'reset') { if (near.on) v.frameRing(near.r * 1000, 1100); else v.reset(); return; }
+  else if (d.act === 'near') { near.on ? closeNear(true) : openNear(1); return; }
+  else if (d.nearR) { showRing(+d.nearR); return; }
+  else if (d.nearCat) { near.off.has(d.nearCat) ? near.off.delete(d.nearCat) : near.off.add(d.nearCat); render(true); return; }
+  else if (d.place) { pickPlace(d.place); return; }
   else if (d.act === 'full') { toggleFull(); return; }
   else if (d.act === 'side') { const c = root.classList.toggle('v-collapsed'); t.setAttribute('aria-expanded', String(!c)); t.setAttribute('aria-label', c ? 'Show details' : 'Hide details'); t.title = t.getAttribute('aria-label'); v.layout(); onFrame(); return; }
   else return;
@@ -341,6 +418,7 @@ subscribe(e => {
 panel.addEventListener('pointerover', e => {
   const t = e.target.closest('[data-flat]'); if (t && (v.state.mode === 'floor' || v.state.mode === 'flat')) v.setHoverFlat(t.dataset.flat);
   const r = e.target.closest('[data-room]'); labels.querySelectorAll('.rlabel').forEach(l => l.classList.toggle('hot', r && l.dataset.room === r.dataset.room));
+  const pl = e.target.closest('[data-place]'); labels.querySelectorAll('.npin').forEach(b => b.classList.toggle('hot', !!pl && b.dataset.place === pl.dataset.place));
 });
 panel.addEventListener('pointerout', e => { if (e.target.closest('[data-flat]')) v.setHoverFlat(null); });
 
@@ -404,10 +482,17 @@ const theme = new URLSearchParams(location.search).get('theme'); // ?theme=dark 
 if (theme === 'dark' || theme === 'light') root.dataset.theme = theme;
 if (window.matchMedia && matchMedia('(pointer: coarse)').matches) hint.textContent = 'Drag to rotate · Pinch to zoom · Tap a wing';
 try {
-  v = createViewer(root, { onMode: () => {}, onSelect: render, onHover, onFrame: () => v && onFrame(), onInteract });
+  v = createViewer(root, { onMode: () => {}, onSelect: render, onHover, onFrame: () => v && onFrame(), onInteract, onMap: (on, credit) => { attrEl.hidden = !on; attrEl.innerHTML = on ? credit : ''; } });
+  const qs = new URLSearchParams(location.search), deep = qs.get('flat');
+  // The real map under the building. Without it (MAP = false in config.js, ?map=0, or the 3D export tool) the viewer is exactly the plain one.
+  if (MAP !== false && qs.get('map') !== '0' && !(typeof __BUILD__ !== 'undefined' && __BUILD__ === 'export')) {
+    const key = qs.get('gmaps_key') || root.dataset.mapsKey || GOOGLE_MAPS_KEY; // a key in the address bar or on the widget's tag wins, handy for trying one out
+    const fallback = MAP_TILES && MAP_TILES.url ? () => templateTiles(MAP_TILES.url, MAP_TILES.credit, MAP_TILES.maxZoom) : osmTiles;
+    v.setMap({ site: SITE, radii: RADII, source: key ? googleTiles(key, SITE).catch(err => { console.warn('[Arch3] ' + err.message); toast('<b>Google Maps is not on</b><span>Showing the standard map instead</span>'); return fallback(); }) : fallback() });
+  }
   render();
   window.__viewer = v;
-  const qs = new URLSearchParams(location.search), deep = qs.get('flat');
+  if (!deep && v.mapOn && qs.get('view') === 'nearby') { document.getElementById('explore')?.scrollIntoView(); openNear(RADII.includes(+qs.get('r')) ? +qs.get('r') : 1); } // e.g. ?view=nearby&r=2
   if (!deep && qs.get('plan') === 'premium' && PREMIUM_SITE) { prem.on = true; render(); } // e.g. ?flat=A-506&inside=1 (links from the sales console)
   if (deep) {
     document.getElementById('explore')?.scrollIntoView();

@@ -12,7 +12,7 @@
 /playground/*
   ! Content-Security-Policy
   ! X-Frame-Options
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cfkkzduvxdqhtvpdtcwq.supabase.co wss://cfkkzduvxdqhtvpdtcwq.supabase.co; worker-src 'self' blob:; frame-ancestors *; base-uri 'self'; form-action 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://tile.googleapis.com; font-src 'self' data:; connect-src 'self' https://cfkkzduvxdqhtvpdtcwq.supabase.co wss://cfkkzduvxdqhtvpdtcwq.supabase.co https://tile.googleapis.com; worker-src 'self' blob:; frame-ancestors *; base-uri 'self'; form-action 'none'; object-src 'none'
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

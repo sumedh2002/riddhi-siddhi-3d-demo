@@ -8,6 +8,7 @@ import { flatLayout } from './layout.js';
 import { createInteriorKit } from './interiors.js';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { statusOf } from './inventory.js';
+import { createMapGround } from './mapground.js';
 export { unitId, statusOf };
 export const DATA = { FLATS, NF };
 function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
@@ -258,18 +259,22 @@ export function createViewer(root, hooks = {}) {
   }
 
   // Site, road, context
+  // "plain" is the stand-in for the surroundings (flat ground, the road, neighbouring blocks, street trees and cars).
+  // It is what you see until the real map is on (see setMap); the plot itself always stays.
+  const plain = new THREE.Group(), plainBits = []; site.add(plain); // plainBits: the street trees and passing cars (kept as direct children of greens)
+  const street = o => { plainBits.push(o); greens.add(o); };
   {
-    site.add(meshOf([boxG(-120, -110, 160, 140, -0.3, -0.02)], M.ground, { cast: false }));
+    plain.add(meshOf([boxG(-120, -110, 160, 140, -0.3, -0.02)], M.ground, { cast: false }));
     site.add(meshOf([boxG(-2.5, -3.5, 45.6, 27.8, -0.02, 0.02)], M.paver, { cast: false }));
     site.add(meshOf([boxG(-2.5, -3.5, 45.6, -1.0, 0.02, 0.06), boxG(-2.5, -1.0, -0.4, 27.8, 0.02, 0.06), boxG(43.6, -1.0, 45.6, 27.8, 0.02, 0.06)], M.grass2, { cast: false }));
     const cw = [boxG(-2.7, -3.7, 45.8, -3.5, 0, 1.5), boxG(-2.7, -3.5, -2.5, 28.0, 0, 1.5), boxG(45.6, -3.5, 45.8, 28.0, 0, 1.5), boxG(-2.7, 27.8, 17.0, 28.0, 0, 1.5), boxG(26.1, 27.8, 45.8, 28.0, 0, 1.5)];
     site.add(meshOf(cw, M.trim));
     site.add(meshOf([boxG(16.6, 27.6, 17.6, 28.4, 0, 2.6), boxG(25.6, 27.6, 26.6, 28.4, 0, 2.6)], M.wallA));
     site.add(meshOf([boxG(16.5, 27.5, 17.7, 28.5, 2.6, 2.8), boxG(25.5, 27.5, 26.7, 28.5, 2.6, 2.8)], M.trim));
-    site.add(meshOf([boxG(-120, 28.0, 160, 30.0, 0, 0.15), boxG(-120, 41.0, 160, 43.0, 0, 0.15)], M.curb, { cast: false }));
-    site.add(meshOf([boxG(-120, 30.0, 160, 41.0, -0.02, 0.03)], M.asphalt, { cast: false }));
+    plain.add(meshOf([boxG(-120, 28.0, 160, 30.0, 0, 0.15), boxG(-120, 41.0, 160, 43.0, 0, 0.15)], M.curb, { cast: false }));
+    plain.add(meshOf([boxG(-120, 30.0, 160, 41.0, -0.02, 0.03)], M.asphalt, { cast: false }));
     const dashes = []; for (let x = -118; x < 158; x += 6) dashes.push(boxG(x, 35.4, x + 3, 35.6, 0.03, 0.04));
-    site.add(meshOf(dashes, M.trim, { cast: false }));
+    plain.add(meshOf(dashes, M.trim, { cast: false }));
     // context buildings
     const ctx = [[-34, -8, -10, 16, 18], [-32, -40, -8, -14, 14], [54, -6, 76, 20, 21], [52, -40, 78, -14, 16], [-4, -44, 20, -18, 11], [24, -46, 48, -20, 24]];
     const ctxImg = ctxFacade(), ctxTop = new THREE.MeshStandardMaterial({ color: 0xd9d6cf, roughness: 0.95 }), tints = [0xf1ece2, 0xe6e9ec, 0xefe6d8];
@@ -277,15 +282,15 @@ export function createViewer(root, hooks = {}) {
       const w = c[2] - c[0], d = c[3] - c[1], h = c[4];
       const side = len => { const t = ctxImg.clone(); t.needsUpdate = true; t.repeat.set(Math.max(1, Math.round(len / 8)), Math.max(1, Math.round(h / 12))); return new THREE.MeshStandardMaterial({ map: t, color: tints[i % 3], roughness: 0.92 }); };
       const sx = side(d), sz = side(w), m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [sx, sx, ctxTop, ctxTop, sz, sz]);
-      m.position.set((c[0] + c[2]) / 2 - CX, h / 2, (c[1] + c[3]) / 2 - CY); m.castShadow = true; m.receiveShadow = true; m.userData.context = true; site.add(m);
+      m.position.set((c[0] + c[2]) / 2 - CX, h / 2, (c[1] + c[3]) / 2 - CY); m.castShadow = true; m.receiveShadow = true; m.userData.context = true; plain.add(m);
     });
     // trees
     for (const p of [[-1.0, 26.5], [4.5, 26.6], [10.0, 26.6], [33.0, 26.6], [38.5, 26.6], [44.2, 26.6], [44.4, 20], [44.4, 13], [44.4, 6], [44.4, -1.5], [-1.4, 19], [-1.4, 12], [-1.4, 5], [-1.4, -2], [8, -2.3], [16, -2.3], [27, -2.3], [35, -2.3]]) greens.add(tree(p[0], p[1], 1.5));
     for (const p of [[14.6, 26.8], [28.5, 26.8], [-1.2, 26.0]]) greens.add(palm(p[0], p[1]));
-    for (const x of [-60, -40, -20, 0, 20, 40, 60, 80, 100]) greens.add(tree(x + 7, 42.1, 1.6));
+    for (const x of [-60, -40, -20, 0, 20, 40, 60, 80, 100]) street(tree(x + 7, 42.1, 1.6));
     // cars
     const carCols = [0xf4f4f2, 0xb91c1c, 0x1e3a8a, 0x9ca3af, 0x111827, 0xf4f4f2];
-    [[4, 32.0, 0], [28, 37.5, 1], [-14, 37.6, 2], [52, 32.1, 3]].forEach(([x, y, c]) => greens.add(car(x, y, carCols[c], false)));
+    [[4, 32.0, 0], [28, 37.5, 1], [-14, 37.6, 2], [52, 32.1, 3]].forEach(([x, y, c]) => street(car(x, y, carCols[c], false)));
     [[3.0, 18.2, 4], [6.0, 18.2, 5], [36.0, 18.2, 1], [39.0, 18.2, 3]].forEach(([x, y, c]) => greens.add(car(x, y, carCols[c], true)));
   }
 
@@ -482,6 +487,7 @@ export function createViewer(root, hooks = {}) {
     verticals.visible = xr && m !== 'apt';
     site.visible = true; greens.visible = !xr;
     plan.visible = xr;
+    if (ground) ground.rings.visible = m === 'site';
     if (xr) plan.position.y = f * FH + 0.06;
     const inside = m === 'apt' && state.furnished && state.flat;
     aimSun(inside ? flatParts[state.flat].center.clone().setY(f * FH) : null);
@@ -513,10 +519,54 @@ export function createViewer(root, hooks = {}) {
     invalidate();
   }
 
+  /* ---------- the real map under the building, and distance rings around it (mapground.js) ---------- */
+  const CLASSIC = 200, FAR = 36000; // how far out the camera may go: everywhere (as before), and in the project view once a map is set
+  let ground = null, lastD = -1;
+  const camDist = () => camera.position.distanceTo(controls.target);
+  function setMap({ site: at, radii, source }) {
+    if (ground) return;
+    ground = createMapGround({ site: at, radii, renderer, onChange: invalidate, onLive: on => {
+      plain.visible = !on; for (const o of plainBits) o.visible = !on; // the stand-in surroundings step aside for the real ones
+      renderer.shadowMap.needsUpdate = true; lastD = -1; invalidate(); hooks.onMap && hooks.onMap(on, ground.credit);
+    } });
+    scene.add(ground.base); scene.add(ground.group); scene.add(ground.rings);
+    ground.rings.visible = state.mode === 'site'; lastD = -1; resize();
+    Promise.resolve(source).then(s => { ground.setSource(s); lastD = -1; invalidate(); }, () => {});
+  }
+  function farView(D) { // everything that depends on how far out the camera is. Up to 200 m nothing differs from before.
+    const fogF = Math.max(420, 4.5 * D - 480);
+    scene.fog.near = Math.max(170, 1.6 * D - 150); scene.fog.far = fogF;
+    camera.near = D > 260 ? D * 0.012 : 0.5; camera.far = Math.max(900, fogF * 1.15); camera.updateProjectionMatrix();
+    controls.zoomSpeed = D > 210 ? 2.6 : 1; controls.screenSpacePanning = D <= 260;
+    if (ground) { ground.base.visible = ground.live || D > 230; ground.update(D, fogF); }
+  }
+
+  /* Zooming out of the building tips the view up, the way a map does, so the ground and the rings open out instead of
+     being seen edge-on; zooming back in brings the camera down to where it was. Turning the view by hand out there
+     leaves it in the visitor's hands until they are back at the building. Inside the first 200 m nothing is touched. */
+  const LOW = controls.maxPolarAngle, HIGH = 40 * Math.PI / 180, sph = new THREE.Spherical(), offv = new THREE.Vector3(), downs = new Set();
+  let rest = null, byHand = false, turning = false, lastPhi = null;
+  renderer.domElement.addEventListener('pointerdown', ev => { downs.add(ev.pointerId); turning = downs.size === 1 && (ev.pointerType !== 'mouse' || ev.button === 0); });
+  ['pointerup', 'pointercancel'].forEach(n => renderer.domElement.addEventListener(n, ev => { downs.delete(ev.pointerId); turning = false; }));
+  function tilt() {
+    offv.copy(camera.position).sub(controls.target); sph.setFromVector3(offv);
+    const D = sph.radius;
+    if (turning && lastPhi !== null && D > CLASSIC && Math.abs(sph.phi - lastPhi) > 1e-4) byHand = true;
+    if (D <= CLASSIC) { byHand = false; rest = sph.phi; }
+    else if (!byHand && !turning) {
+      const want = Math.min(rest === null ? LOW : rest, LOW + (HIGH - LOW) * Math.min(1, Math.log(D / CLASSIC) / Math.log(6)));
+      if (Math.abs(sph.phi - want) > 1e-4) { sph.phi = want; camera.position.copy(controls.target).add(offv.setFromSpherical(sph)); camera.lookAt(controls.target); dirty = true; }
+    }
+    lastPhi = sph.phi;
+  }
+
   /* ---------- camera flights ---------- */
   let flight = null;
   function flyTo(pos, target, dur = 1400) {
-    flight = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos.clone(), t1: target.clone(), s: performance.now(), d: dur };
+    byHand = false;
+    const o0 = camera.position.clone().sub(controls.target), o1 = pos.clone().sub(target), far = Math.max(o0.length(), o1.length()) > 260;
+    flight = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos.clone(), t1: target.clone(), s: performance.now(), d: dur,
+      zoom: far ? { u0: o0.clone().normalize(), u1: o1.clone().normalize(), l0: Math.log(o0.length()), l1: Math.log(o1.length()) } : null }; // a long zoom changes scale evenly
   }
   const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   const fit = o => o.multiplyScalar(camera.aspect < 1 ? 1.4 : 1);
@@ -527,6 +577,14 @@ export function createViewer(root, hooks = {}) {
     flat: k => { const p = flatParts[k], c = p.center.clone(); c.y = state.floor * FH + 0.5; const s = p.box.getSize(new THREE.Vector3()).length(); return [c.clone().add(fit(new THREE.Vector3(-0.6 * s - 8, 1.5 * s + 14, 1.0 * s + 14))), c]; },
     apt: k => { const p = flatParts[k], c = p.center.clone(); c.y = state.floor * FH + 0.4; const s = p.box.getSize(new THREE.Vector3()).length(); const o = state.furnished ? new THREE.Vector3(-0.42 * s, 1.38 * s + 3.6, 0.8 * s + 1.4) : new THREE.Vector3(-0.55 * s, 1.15 * s + 3, 0.9 * s + 1); return [c.clone().add(fit(o)), c]; }
   };
+
+  // A whole distance ring (radius m, centred on the building) in view: from the side the camera is on now, tilted like a model on a table.
+  function ringView(m) {
+    const w = canvasWrap.clientWidth, h = canvasWrap.clientHeight, free = w > 820 && !root.classList.contains('v-collapsed') ? w - 372 : w;
+    const el = 50 * Math.PI / 180, t = Math.tan(el + 12.4 * Math.PI / 180), az = controls.getAzimuthalAngle();
+    const D = Math.max(m * t / (t * Math.cos(el) - Math.sin(el)), m / (0.86 * Math.tan(15 * Math.PI / 180) * free / h)); // fits top to bottom, and side to side
+    return [new THREE.Vector3(Math.sin(az) * Math.cos(el) * D, Math.sin(el) * D, Math.cos(az) * Math.cos(el) * D), new THREE.Vector3(0, 0, 0)];
+  }
 
   /* ---------- public API ---------- */
   const api = {
@@ -549,6 +607,19 @@ export function createViewer(root, hooks = {}) {
     azimuth() { return controls.getAzimuthalAngle(); },
     setAutoRotate(v) { controls.autoRotate = v; invalidate(); },
     layout() { resize(); }, // call after the side panel is hidden or shown
+    /* the map under the building (optional): setMap({ site: { lat, lng, heading }, radii: [km…], source: a tile source from mapground.js }) */
+    setMap,
+    get mapOn() { return !!ground; }, // a map was set, so the project view can zoom out past the building
+    get mapLive() { return !!ground && ground.live; }, // its tiles have arrived
+    geo(lat, lng, y = 0) { const q = ground ? ground.frame.toScene(lat, lng) : [0, 0]; return new THREE.Vector3(q[0], y, q[1]); }, // a place on the map → a point in the scene
+    vec: (x, y, z) => new THREE.Vector3(x, y, z),
+    north() { return ground ? ground.frame.theta : 0; },
+    dist: camDist, // camera to what it looks at, in metres
+    flying: () => !!flight,
+    ringDist: m => ringView(m)[0].length(),
+    frameRing(m, dur = 1500) { controls.autoRotate = false; flyTo(...ringView(m), dur); },
+    setRing(km) { if (ground) ground.setRadius(km); }, // highlight one distance ring (null: none)
+    seen: p => camera.position.distanceTo(p) < scene.fog.far * 0.9, // not lost in the haze
     renderer, scene, camera
   };
 
@@ -596,6 +667,7 @@ export function createViewer(root, hooks = {}) {
     camera.aspect = (w + 2 * side) / h;
     if (side) camera.setViewOffset(w + 2 * side, h, 2 * side, 0, w, h); else camera.clearViewOffset();
     camera.updateProjectionMatrix(); invalidate();
+    if (ground) ground.resize(w, h);
   }
   new ResizeObserver(resize).observe(canvasWrap); resize();
   [camera.position, controls.target] = [VIEW.site()[0], VIEW.site()[1]];
@@ -607,15 +679,20 @@ export function createViewer(root, hooks = {}) {
   function loop(t) {
     requestAnimationFrame(loop);
     if (!visible) return;
+    controls.maxDistance = ground && (flight || state.mode === 'site') ? FAR : CLASSIC;
     if (flight) {
-      const k = Math.min(1, (t - flight.s) / flight.d), e = ease(k);
-      camera.position.lerpVectors(flight.p0, flight.p1, e); controls.target.lerpVectors(flight.t0, flight.t1, e);
+      const k = Math.min(1, Math.max(0, (t - flight.s) / flight.d)), e = ease(k), z = flight.zoom; // a frame can be stamped earlier than the moment the flight was asked for
+      controls.target.lerpVectors(flight.t0, flight.t1, e);
+      if (z) camera.position.lerpVectors(z.u0, z.u1, e).normalize().multiplyScalar(Math.exp(z.l0 + (z.l1 - z.l0) * e)).add(controls.target);
+      else camera.position.lerpVectors(flight.p0, flight.p1, e);
       if (k >= 1) flight = null;
       dirty = true;
     }
     if (controls.update() || controls.autoRotate) dirty = true;
+    if (ground && !flight && state.mode === 'site') tilt();
     if (!dirty) return;
     dirty = false;
+    const D = camDist(); if (Math.abs(D - lastD) > 0.005) { lastD = D; farView(D); }
     renderer.render(scene, camera);
     hooks.onFrame && hooks.onFrame();
   }
